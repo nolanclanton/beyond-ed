@@ -182,10 +182,11 @@ export default async function ReviewPage() {
         >
           Keep-fresh review
         </SectionHeading>
-        <Empty>
+        <Banner title="Memory work lives inside your lessons." tone="notice">
           Your keep-fresh items appear as the Spiral Review at stage 2 of each
-          lesson. There is no separate queue to work through.
-        </Empty>
+          lesson. There is no separate queue to work through — bringing earlier
+          learning back is part of the lesson, not an extra task.
+        </Banner>
       </section>
     </div>
   );

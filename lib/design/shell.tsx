@@ -45,7 +45,7 @@ export function AppShell({
         Skip to main content
       </a>
 
-      <header className="bg-brand-maroon text-white">
+      <header className="brand-field text-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex items-baseline gap-2.5">
             <Link href={role.home} className={`text-base font-semibold tracking-tight ${FOCUS_RING}`}>

@@ -44,7 +44,7 @@ export function CurriculumMoveForm({
 
   if (blocked) {
     return (
-      <div className="rounded-lg border border-notice-line bg-notice-surface p-4">
+      <div className="rounded-lg border border-recall-line bg-recall-surface p-4">
         <p className="text-sm font-semibold text-ink">
           {action.label} is blocked
         </p>

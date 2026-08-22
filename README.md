@@ -23,9 +23,11 @@ pnpm install
 pnpm dev
 ```
 
-Open <http://localhost:3000> and pick a person to review as. There is no
-password, because there is no authentication in this build — see
-[ADR 0003](docs/decisions/0003-demo-identity-not-authentication.md).
+Open <http://localhost:3000> and choose a portal. There is no password, because
+there is no authentication in this build — see
+[ADR 0003](docs/decisions/0003-demo-identity-not-authentication.md). Each portal
+opens as the demo person whose record demonstrates that role; every other seeded
+person is behind the disclosure at the bottom of the entry screen.
 
 **The store is in memory and resets when the dev server restarts.** "Rebuild
 demo data" on the landing page resets it without a restart.
@@ -47,12 +49,12 @@ The fastest path through the product's core promise — *detect the smallest
 blocking skill, show the evidence, assign the shortest appropriate support,
 verify transfer, and return the student to the exact pathway location*:
 
-1. **Sign in as Renata Alvarez (teacher).** The action queue shows
+1. **Open the Teacher Portal.** The action queue shows
    recommendations with their trigger evidence, the ranking inputs, the
    suggested support, the return destination, and the return rule. Open
    "Preview and assign" on Amara Oyelaran's `6.RP.1` item, read what the student
    would see, and assign it with a reason.
-2. **Switch to Amara Oyelaran (student).** Today shows the support first,
+2. **Switch to the Student Portal.** Today shows the support first,
    because finishing it unblocks the lesson behind it. Open it: the return
    destination is on every screen. Work the model, take the readiness check and
    the transfer item, and watch the return rule decide whether you go back.
@@ -98,6 +100,14 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm test:policies
 - `pnpm test:policies` — 28 scope-isolation tests, each grant with a positive
   and a negative case
 - `pnpm catalog` — regenerates the curriculum catalog from the blueprint
+
+## Colour
+
+Blue and green are dominant and calm — the pathway, progress, actions, and
+reading surfaces. Amber is reserved for **memory cues**: Spiral Review, work
+that comes back, a skill going stale. Red is for genuinely urgent states only.
+Warmth is doing a job, not decorating
+([ADR 0008](docs/decisions/0008-entry-portals-and-colour-ethos.md)).
 
 ## How it is built
 

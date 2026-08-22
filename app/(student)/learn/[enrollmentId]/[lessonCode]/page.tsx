@@ -423,7 +423,12 @@ function StageBody(props: StageBodyProps) {
 
     case 2:
       return (
-        <Card>
+        <Card className="border-recall-line">
+          <div className="border-b border-recall-line bg-recall-surface px-5 py-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-recall">
+              Memory work — bringing earlier learning back
+            </p>
+          </div>
           <CardHeader
             title={`2. ${title}`}
             hint="Five to seven items chosen for you by rule, not at random."

@@ -233,7 +233,7 @@ export default async function OrgPage() {
                         <td className="px-5 py-2.5 text-ink-muted">{slice.enrollments}</td>
                         <td className="px-5 py-2.5 text-xs">
                           {slice.suppressed ? (
-                            <span className="font-medium text-notice">
+                            <span className="font-medium text-recall">
                               Suppressed — fewer than {MIN_GROUP_SIZE}
                             </span>
                           ) : (

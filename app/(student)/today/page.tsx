@@ -92,11 +92,13 @@ export default async function TodayPage() {
             }
             label="Work completed"
             caption="Of the lessons you have reached so far"
+            tone="positive"
           />
           <MetricTile
             value={`${metrics.courses.reduce((n, c) => n + c.lessonsComplete, 0)}`}
             label="Lessons finished"
             caption={`Across ${metrics.courses.length} courses`}
+            tone="positive"
           />
           <MetricTile
             value={`${metrics.activeMinutes}`}

@@ -4,36 +4,41 @@
  * Design tokens. `lib/design/tokens.ts` is the documented source of truth for
  * these values — keep the two in sync (CLAUDE.md §1).
  *
- * The student and staff surfaces are committed to a single light palette. There
- * is no dark theme: the blue/green/amber/red role separation in CLAUDE.md §13
- * carries meaning, and a second palette would need its own contrast and
- * meaning audit before it could be trusted to preserve that.
+ * Blue and green are dominant and calm; amber marks memory cues and red marks
+ * genuinely urgent states (CLAUDE.md §13). The surfaces are committed to a
+ * single light palette. There is no dark theme: the role separation carries
+ * meaning, and a second palette would need its own contrast and meaning audit
+ * before it could be trusted to preserve that.
  */
 @theme {
-  --color-brand-maroon: #481514;
+  --color-brand-deep: #0c3a47;
+  --color-brand-green: #0e4a42;
+  --color-brand-blue: #123f55;
+  --color-brand-accent: #4fd1c5;
 
-  --color-canvas: #f6f7f9;
+  --color-canvas: #f6f8f8;
   --color-surface: #ffffff;
-  --color-surface-sunken: #eff2f5;
+  --color-surface-sunken: #eef2f3;
 
-  --color-ink: #1c1f23;
-  --color-ink-muted: #5a626b;
+  --color-ink: #16292e;
+  --color-ink-muted: #54646a;
 
-  --color-line: #dfe3e8;
-  --color-line-strong: #c7cdd4;
+  --color-line: #dce4e6;
+  --color-line-strong: #c2ced1;
 
   --color-primary: #1f5fa0;
   --color-primary-strong: #174b80;
-  --color-primary-surface: #eef4fa;
-  --color-primary-line: #c3d7e9;
+  --color-primary-surface: #edf3fa;
+  --color-primary-line: #c0d5e8;
 
-  --color-positive: #2e7d57;
-  --color-positive-surface: #eaf4ef;
-  --color-positive-line: #bcdccb;
+  --color-positive: #2a7a5c;
+  --color-positive-strong: #1f6149;
+  --color-positive-surface: #e8f4ee;
+  --color-positive-line: #b7dac8;
 
-  --color-notice: #8a5300;
-  --color-notice-surface: #fdf3e3;
-  --color-notice-line: #f0d9ae;
+  --color-recall: #8a5300;
+  --color-recall-surface: #fdf3e3;
+  --color-recall-line: #f0d9ae;
 
   --color-urgent: #a03028;
   --color-urgent-surface: #fbedec;
@@ -51,4 +56,17 @@ body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+}
+
+/**
+ * The product's own deep blue-green field: the application bar and the entry
+ * screen. A calm, considered ground rather than a warm one.
+ */
+.brand-field {
+  background-image: linear-gradient(
+    155deg,
+    var(--color-brand-blue) 0%,
+    var(--color-brand-deep) 48%,
+    var(--color-brand-green) 100%
+  );
 }

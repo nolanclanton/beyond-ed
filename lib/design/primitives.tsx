@@ -185,7 +185,7 @@ export function PreviewAction({
 const BANNER_TONE = {
   info: "border-primary-line bg-primary-surface text-ink",
   positive: "border-positive-line bg-positive-surface text-ink",
-  notice: "border-notice-line bg-notice-surface text-ink",
+  notice: "border-recall-line bg-recall-surface text-ink",
   urgent: "border-urgent-line bg-urgent-surface text-ink",
   neutral: "border-line bg-surface-sunken text-ink",
 } as const;
@@ -283,7 +283,7 @@ export function MetricTile({
     neutral: "text-ink",
     info: "text-primary",
     positive: "text-positive",
-    attention: "text-notice",
+    attention: "text-recall",
   }[tone];
   return (
     <Card className="p-4">
@@ -372,7 +372,7 @@ export function Meter({
     neutral: "bg-line-strong",
     info: "bg-primary",
     positive: "bg-positive",
-    attention: "bg-notice",
+    attention: "bg-recall",
   }[tone];
   return (
     <div className="flex items-center gap-3">

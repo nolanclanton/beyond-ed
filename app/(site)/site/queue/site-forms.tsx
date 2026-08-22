@@ -32,7 +32,7 @@ export function SiteDecideForm({
       </Button>
 
       {open ? (
-        <div className="mt-4 rounded-lg border border-notice-line bg-notice-surface p-4">
+        <div className="mt-4 rounded-lg border border-recall-line bg-recall-surface p-4">
           <p className="text-sm font-semibold text-ink">
             This is recorded as a site-administrator assignment
           </p>

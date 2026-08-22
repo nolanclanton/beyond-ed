@@ -360,7 +360,7 @@ A change is not complete until all of the following hold.
 - **Context-preserving navigation.** Breadcrumbs and drawers keep the selected student, lesson, skill, and return location intact.
 - **Confirm consequential changes**: assignments, grades, enrollment, transfers, role changes, publication, bulk actions.
 - **Supportive language.** Never expose raw risk labels, rankings, or deficit framing to students. Every student view answers: What am I doing now? Why? What must I show next?
-- **Palette:** blue and green dominant and calm; yellow, orange, and red reserved for memory cues, encouragement, and genuinely urgent states. Brand maroon (`#481514`) anchors product branding. Muted, clearly differentiated tones — nothing neon, glowing, or low-contrast.
+- **Palette:** blue and green **dominant and calm** — they carry the pathway, progress, actions, and reading surfaces, and they are what a student sees for hours. Yellow, orange, and red are **reserved and rare**: amber marks **memory cues** (Spiral Review, keep-fresh work, a skill going stale, an upcoming dependency), and red marks genuinely urgent states only. Warmth is doing a job, not decorating. Product branding is a deep blue-green field (`#0C3A47` → `#0E4A42`), so the largest persistent surface reinforces the ethos rather than fighting it. Muted, clearly differentiated tones — nothing neon, glowing, or low-contrast.
 - **Mobile priorities:** Today, lesson stages, evidence capture, teacher triage, quick return to pathway.
 - **Teacher target:** student error → evidence-backed assignment in **under one minute**. **Student target:** identify today's work and resume the exact activity in **one action**.
 

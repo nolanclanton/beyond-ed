@@ -48,7 +48,7 @@ export default async function SequencePage({
       </nav>
 
       <header className="mt-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-brand-maroon">
+        <p className="text-xs font-bold uppercase tracking-wider text-positive">
           Example lesson sequence
         </p>
         <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-ink">

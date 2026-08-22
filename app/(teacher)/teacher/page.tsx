@@ -33,7 +33,8 @@ const SEVERITY_PRESENTATION = {
   immediate: { label: "Immediate", tone: "attention" as const },
   teacher_review: { label: "Needs your judgment", tone: "attention" as const },
   targeted: { label: "Targeted", tone: "info" as const },
-  spaced: { label: "Spaced review", tone: "neutral" as const },
+  // Amber: spaced review is retrieval practice, which is the memory role.
+  spaced: { label: "Spaced review", tone: "attention" as const },
 };
 
 /**

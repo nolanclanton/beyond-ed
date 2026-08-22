@@ -53,9 +53,12 @@ export const LESSON_STATUS_PRESENTATION: Record<
     tone: "positive",
   },
   review_scheduled: {
+    // Amber, not green: this is a memory cue. The lesson is done for now and
+    // will return, and that "will return" is the thing the student should
+    // register (CLAUDE.md §13 — warm colours mark memory).
     label: "Review scheduled",
     studentMeaning: "Done for now. This comes back later to keep it fresh.",
-    tone: "positive",
+    tone: "attention",
   },
   completed: {
     label: "Completed",
