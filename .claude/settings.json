@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "default",
+
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm format:*)",
+      "Bash(npx tsc:*)",
+
+      "Bash(supabase start)",
+      "Bash(supabase stop)",
+      "Bash(supabase status)",
+      "Bash(supabase migration new:*)",
+      "Bash(supabase migration list)",
+      "Bash(supabase db diff:*)",
+      "Bash(supabase gen types:*)",
+
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git switch:*)",
+
+      "Read(./docs/**)",
+      "Read(./supabase/**)",
+      "Write(./app/**)",
+      "Write(./lib/**)",
+      "Write(./tests/**)",
+      "Write(./supabase/migrations/**)",
+      "Write(./supabase/policies/**)",
+      "Write(./docs/decisions/**)"
+    ],
+
+    "ask": [
+      "Bash(supabase db push:*)",
+      "Bash(supabase link:*)",
+      "Bash(supabase db reset:*)",
+      "Bash(supabase secrets:*)",
+      "Bash(vercel:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh release:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(npm install:*)",
+      "Write(./CLAUDE.md)",
+      "Write(./package.json)",
+      "Write(./.github/**)"
+    ],
+
+    "deny": [
+      "Bash(supabase db reset --linked:*)",
+      "Bash(psql:*)",
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(vercel --prod:*)",
+      "Bash(vercel promote:*)",
+      "Bash(vercel env rm:*)",
+      "Bash(curl:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./.vercel/**)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Write(./supabase/migrations/20*)"
+    ]
+  }
+}

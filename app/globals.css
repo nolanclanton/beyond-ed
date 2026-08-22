@@ -1,26 +1,54 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/**
+ * Design tokens. `lib/design/tokens.ts` is the documented source of truth for
+ * these values — keep the two in sync (CLAUDE.md §1).
+ *
+ * The student and staff surfaces are committed to a single light palette. There
+ * is no dark theme: the blue/green/amber/red role separation in CLAUDE.md §13
+ * carries meaning, and a second palette would need its own contrast and
+ * meaning audit before it could be trusted to preserve that.
+ */
+@theme {
+  --color-brand-maroon: #481514;
+
+  --color-canvas: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eff2f5;
+
+  --color-ink: #1c1f23;
+  --color-ink-muted: #5a626b;
+
+  --color-line: #dfe3e8;
+  --color-line-strong: #c7cdd4;
+
+  --color-primary: #1f5fa0;
+  --color-primary-strong: #174b80;
+  --color-primary-surface: #eef4fa;
+  --color-primary-line: #c3d7e9;
+
+  --color-positive: #2e7d57;
+  --color-positive-surface: #eaf4ef;
+  --color-positive-line: #bcdccb;
+
+  --color-notice: #8a5300;
+  --color-notice-surface: #fdf3e3;
+  --color-notice-line: #f0d9ae;
+
+  --color-urgent: #a03028;
+  --color-urgent-surface: #fbedec;
+  --color-urgent-line: #efc9c6;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }

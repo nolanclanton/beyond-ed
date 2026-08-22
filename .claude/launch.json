@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "beyond-ed",
+      "url": "http://localhost:3000",
+      "port": 3000,
+      "comment": "Attach-only. The preview harness cannot spawn this project: macOS denies the spawned process read access under ~/Desktop (EPERM on open). Run `pnpm dev` yourself, then attach. To let the harness launch it directly, grant Files and Folders / Full Disk Access to Claude Code, or move the project out of ~/Desktop, then replace this with runtimeExecutable: pnpm, runtimeArgs: [dev], autoPort: true."
+    }
+  ]
+}
