@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Beyond.Ed",
   description:
-    "Learning and academic operations for Mojave River Academy, grades 6-12.",
+    "A grades 6-12 learning and academic-operations platform: coherent core pathways, evidence-based intervention, and accountable human decisions.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

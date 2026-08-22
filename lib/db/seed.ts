@@ -19,6 +19,7 @@
  * authored demo item bank in `demo-items.ts`.
  */
 import { currentTimestamp, nextTimestamp, resetClock } from "@/lib/clock";
+import { DEMO_ORGANIZATION, DEMO_SITES, siteDisplayName } from "./demo-identity";
 import {
   COURSES,
   courseLessons,
@@ -197,19 +198,15 @@ function categorySuffix(lessonCode: string): string {
 }
 
 /**
- * The five sites of the district, with the staffing and enrollment each one
- * carries. The named demo people below all sit at the first site; the rest of
- * the population is generated so that district and site rollups have enough
- * students to be meaningful — and so that small-group suppression can be seen
- * working where a slice really is small.
+ * The five sites of the district. The named demo people below all sit at the
+ * first two; the rest of the population is generated so that district and site
+ * rollups have enough students to be meaningful — and so that small-group
+ * suppression can be seen working where a slice really is small.
+ *
+ * Names come from `demo-identity.ts`, which is the only file to change when
+ * rebranding the demo.
  */
-const DISTRICT_SITES = [
-  { id: "site_beaumont", shortName: "Beaumont", students: 126, teachers: 8 },
-  { id: "site_colton", shortName: "Colton", students: 118, teachers: 7 },
-  { id: "site_dhs", shortName: "Desert Hot Springs", students: 94, teachers: 6 },
-  { id: "site_hesperia", shortName: "Hesperia", students: 109, teachers: 7 },
-  { id: "site_victorville", shortName: "Victorville", students: 137, teachers: 9 },
-] as const;
+const DISTRICT_SITES = DEMO_SITES;
 
 /**
  * Name pools for the generated population. Fictional, and combined by index so
@@ -286,17 +283,19 @@ export function ensureSeeded(): void {
   d.seeded = true;
   resetClock();
 
-  const orgId = "org_mra";
-  d.organizations.push({ id: orgId, name: "Mojave River Academy" });
+  const orgId = DEMO_ORGANIZATION.id;
+  d.organizations.push({ id: orgId, name: DEMO_ORGANIZATION.name });
 
   for (const site of DISTRICT_SITES) {
     d.sites.push({
       id: site.id,
       orgId,
-      name: `Mojave River Academy — ${site.shortName}`,
+      name: siteDisplayName(site.shortName),
       shortName: site.shortName,
     });
   }
+  // The named demo people are placed at the first two sites. The keys are
+  // positional aliases, not place names.
   const sites = {
     ORO: d.sites[0],
     MESA: d.sites[1],

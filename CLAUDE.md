@@ -2,7 +2,7 @@
 
 Governing instructions for any AI coding agent working in this repository.
 
-Beyond.Ed is a grades 6–12 learning and academic-operations platform for Mojave River Academy.
+Beyond.Ed is a standalone grades 6–12 learning and academic-operations platform. The organization it serves is a tenant record, not something built into the product.
 Source of truth for product scope: `/docs/blueprint.md` (Platform Concept & Product Blueprint, August 2026).
 This file governs **how** the software is built. Where this file and the blueprint disagree, **this file wins** and you must raise the conflict.
 
@@ -38,7 +38,7 @@ When you are unsure whether something crosses one of these lines: it does. Ask.
 | Auth | **Supabase Auth** | Role and scope claims resolved server-side |
 | Storage | **Supabase Storage** | RLS-scoped buckets |
 | Hosting | **Vercel** | Preview per branch; production is protected |
-| Source control | **MRA-controlled GitHub** | All history stays MRA-owned |
+| Source control | **Owner-controlled GitHub** | All history stays owned by the repository owner |
 | Styling | **Tailwind CSS** | Design tokens in `/lib/design/tokens.ts` |
 | Validation | **Zod** | Every server action and route handler validates input |
 | Testing | **Vitest** (unit/integration), **Playwright** (e2e) | See §12 |
@@ -360,7 +360,7 @@ A change is not complete until all of the following hold.
 - **Context-preserving navigation.** Breadcrumbs and drawers keep the selected student, lesson, skill, and return location intact.
 - **Confirm consequential changes**: assignments, grades, enrollment, transfers, role changes, publication, bulk actions.
 - **Supportive language.** Never expose raw risk labels, rankings, or deficit framing to students. Every student view answers: What am I doing now? Why? What must I show next?
-- **Palette:** blue and green dominant and calm; yellow, orange, and red reserved for memory cues, encouragement, and genuinely urgent states. Mojave River maroon (`#481514`) anchors organizational branding. Muted, clearly differentiated tones — nothing neon, glowing, or low-contrast.
+- **Palette:** blue and green dominant and calm; yellow, orange, and red reserved for memory cues, encouragement, and genuinely urgent states. Brand maroon (`#481514`) anchors product branding. Muted, clearly differentiated tones — nothing neon, glowing, or low-contrast.
 - **Mobile priorities:** Today, lesson stages, evidence capture, teacher triage, quick return to pathway.
 - **Teacher target:** student error → evidence-backed assignment in **under one minute**. **Student target:** identify today's work and resume the exact activity in **one action**.
 

@@ -56,7 +56,7 @@ describe("completion and performance are distinct measures", () => {
 
 describe("site and district rollups", () => {
   it("rolls every site up into the district", () => {
-    const district = districtRollup("org_mra");
+    const district = districtRollup("org_demo");
     expect(district.sites).toHaveLength(5);
     expect(district.students).toBe(584);
     expect(district.teachers).toBe(37);
@@ -65,7 +65,7 @@ describe("site and district rollups", () => {
   });
 
   it("reports a site above the threshold", () => {
-    const roll = siteRollup("site_beaumont");
+    const roll = siteRollup("site_northfield");
     expect(roll.students).toBeGreaterThanOrEqual(MIN_GROUP_SIZE);
     expect(roll.suppressed).toBe(false);
     expect(roll.performancePercent).not.toBeNull();

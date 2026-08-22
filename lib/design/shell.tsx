@@ -31,6 +31,10 @@ export function AppShell({
   const d = db();
   const site = d.sites.find((s) => s.id === user.siteId);
   const role = ROLE_PRESENTATION[user.role];
+  // The organization is a tenant read from the record, never a literal in a
+  // component. Pointing the product at a different district changes data, not
+  // markup.
+  const organization = d.organizations.find((o) => o.id === user.orgId);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -47,8 +51,12 @@ export function AppShell({
             <Link href={role.home} className={`text-base font-semibold tracking-tight ${FOCUS_RING}`}>
               Beyond<span className="text-white/70">.Ed</span>
             </Link>
-            <span aria-hidden="true" className="text-white/40">/</span>
-            <span className="text-sm text-white/80">Mojave River Academy</span>
+            {organization ? (
+              <>
+                <span aria-hidden="true" className="text-white/40">/</span>
+                <span className="text-sm text-white/80">{organization.name}</span>
+              </>
+            ) : null}
           </div>
           <div className="flex items-center gap-4">
             <p className="text-sm text-white/85">

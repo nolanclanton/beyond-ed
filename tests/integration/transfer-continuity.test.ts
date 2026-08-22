@@ -53,11 +53,11 @@ describe("transfer continuity", () => {
 
   it("places the student in exactly one site's scope after the transfer", () => {
     const student = transferred();
-    expect(student.siteId).toBe("site_beaumont");
-    const beaumont = db().users.find((u) => u.id === "u_salinas");
-    const colton = db().users.find((u) => u.id === "u_petrova");
-    if (!beaumont || !colton) throw new Error("seed missing");
-    expect(visibleStudentIds(beaumont)).toContain(student.id);
-    expect(visibleStudentIds(colton)).not.toContain(student.id);
+    expect(student.siteId).toBe("site_northfield");
+    const northfield = db().users.find((u) => u.id === "u_salinas");
+    const riverside = db().users.find((u) => u.id === "u_petrova");
+    if (!northfield || !riverside) throw new Error("seed missing");
+    expect(visibleStudentIds(northfield)).toContain(student.id);
+    expect(visibleStudentIds(riverside)).not.toContain(student.id);
   });
 });

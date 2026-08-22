@@ -71,8 +71,8 @@ untouched, and the following were added:
 
 ### 3. The demo district was scaled to make the rollups real.
 
-MyJourney's district numbers — 5 sites, 584 students, 37 teachers, and the exact
-per-site counts — are reproduced. The previous two-site, eight-student demo made
+MyJourney's district shape — 5 sites, 584 students, 37 teachers, and the exact
+per-site counts — is reproduced under fictional site names (see ADR 0007). The previous two-site, eight-student demo made
 every organization-level aggregate either trivial or suppressed, so the
 suppression rule could not be seen working at all.
 

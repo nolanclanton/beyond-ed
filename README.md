@@ -1,8 +1,12 @@
 # Beyond.Ed — functional beta
 
-A grades 6–12 learning and academic-operations platform for Mojave River
-Academy. Every student stays on a rigorous course pathway and receives precise,
-timely support when the evidence shows a barrier.
+A standalone grades 6–12 learning and academic-operations platform. Every
+student stays on a rigorous course pathway and receives precise, timely support
+when the evidence shows a barrier.
+
+The organization it serves is a **tenant record**, read at request time. No
+customer name is built into the interface — pointing Beyond.Ed at a different
+district means seeding a different organization, not editing markup.
 
 Product source of truth: [`docs/blueprint.md`](docs/blueprint.md).
 Engineering rules: [`CLAUDE.md`](CLAUDE.md).
@@ -26,11 +30,16 @@ password, because there is no authentication in this build — see
 **The store is in memory and resets when the dev server restarts.** "Rebuild
 demo data" on the landing page resets it without a restart.
 
-The seeded district is **5 sites, 584 students, 37 teachers** — Mojave River
-Academy Beaumont, Colton, Desert Hot Springs, Hesperia, and Victorville. Eight
-students and five teachers at Beaumont and Colton have hand-written records that
-demonstrate specific behaviour; the rest of the district is generated so the
-site and organization rollups have a real population behind them.
+The seeded tenant is a fictional district — **Northfield Learning Network**,
+with **5 sites, 584 students, 37 teachers** across Northfield Central,
+Riverside, Oakmont, Lakeview, and Summit. Eight students and five teachers at
+the first two sites have hand-written records that demonstrate specific
+behaviour; the rest is generated so the site and organization rollups have a
+real population behind them.
+
+Everything about that tenant lives in
+[`lib/db/demo-identity.ts`](lib/db/demo-identity.ts) — one file to change to
+rebrand the demo.
 
 ## What to look at
 
@@ -59,9 +68,9 @@ verify transfer, and return the student to the exact pathway location*:
 6. **Yusra Haddad (curriculum author).** The Mathematics 6 `2026.2` draft can be
    moved through review, approval, and publication — and publication is gated on
    135 + 40 = 175.
-7. **Victor Salinas (site administrator).** Beaumont's portal: 126 students, 8
-   teachers, 504 enrollments, teacher loads, and the unresolved queue a site
-   leader can act on with a recorded reason.
+7. **Victor Salinas (site administrator).** Northfield Central's portal: 126
+   students, 8 teachers, 504 enrollments, teacher loads, and the unresolved
+   queue a site leader can act on with a recorded reason.
 8. **Camille Okonjo again, on the district table.** Completion and performance
    per site, and — below it — the grade-12 mathematics branches, where a cohort
    split three ways falls under the 10-student threshold and is suppressed

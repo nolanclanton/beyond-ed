@@ -13,13 +13,14 @@
  *   - `positive` is green — dominant, calm: readiness, progress that held.
  *   - `notice`   is amber — reserved: memory cues, encouragement, time pressure.
  *   - `urgent`   is red   — reserved: genuinely urgent states only. Rare.
- *   - `brandMaroon` is Mojave River maroon — organizational branding only.
+ *   - `brandMaroon` is the product's brand maroon — branding only, never a
+ *     status or an action colour.
  *
  * Every foreground token meets at least 4.5:1 against `surface`.
  */
 
 export const color = {
-  /** Organizational branding only — never a status or an action color. */
+  /** Product branding only — never a status or an action color. */
   brandMaroon: "#481514",
 
   /** Page canvas and raised surfaces. */

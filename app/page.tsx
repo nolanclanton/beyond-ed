@@ -12,7 +12,7 @@ import { COURSES } from "@/lib/curriculum/catalog";
 export const metadata: Metadata = {
   title: "Beyond.Ed — beta",
   description:
-    "Learning and academic operations for Mojave River Academy, grades 6-12.",
+    "A grades 6-12 learning and academic-operations platform: coherent core pathways, evidence-based intervention, and accountable human decisions.",
 };
 
 /**
@@ -60,10 +60,7 @@ export default async function LandingPage({
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-wider text-brand-maroon">
-          Mojave River Academy
-        </p>
-        <h1 className="mt-2 text-4xl font-bold tracking-tight text-ink">Beyond.Ed</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-ink">Beyond.Ed</h1>
         <p className="mt-3 max-w-2xl text-base text-ink-muted">
           A grades 6&ndash;12 learning and academic-operations platform. Every
           student stays on a rigorous course pathway and gets precise, timely
@@ -120,8 +117,11 @@ export default async function LandingPage({
             Real sign-in arrives with Supabase Auth.
           </p>
           <p className="mt-2">
-            Data lives in memory and resets when the server restarts. Every
-            person, roster, grade, and result is fictional.
+            Data lives in memory and resets when the server restarts. The seeded
+            tenant &mdash; {d.organizations[0]?.name} &mdash; is a fictional
+            district, and every person, roster, grade, and result in it is
+            invented. Beyond.Ed is standalone software: the organization is a
+            record it reads, not something built into the product.
           </p>
         </Banner>
       </div>

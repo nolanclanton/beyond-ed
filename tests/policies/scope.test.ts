@@ -90,14 +90,14 @@ describe("teacher scope: assigned roster sections", () => {
   });
 
   it("NEGATIVE: a teacher cannot read a student at another site", () => {
-    const alvarez = user("u_alvarez"); // Beaumont
-    expect(canReadStudent(alvarez, "u_lena")).toBe(false); // Colton
+    const alvarez = user("u_alvarez"); // Northfield Central
+    expect(canReadStudent(alvarez, "u_lena")).toBe(false); // Riverside
     expect(() => assertCanReadStudent(alvarez, "u_lena")).toThrow(/outside your scope/);
   });
 
   it("NEGATIVE: a teacher cannot read a student in a colleague's section at the same site", () => {
-    const delacroix = user("u_delacroix"); // science only, Beaumont
-    const alvarez = user("u_alvarez"); // mathematics, Beaumont
+    const delacroix = user("u_delacroix"); // science only, Northfield Central
+    const alvarez = user("u_alvarez"); // mathematics, Northfield Central
     const scienceOnly = visibleStudentIds(delacroix);
     const mathOnly = visibleStudentIds(alvarez).filter((id) => !scienceOnly.includes(id));
     // Diego is in Mathematics 8 with Alvarez and Integrated Science 8 with
@@ -136,10 +136,10 @@ describe("teacher scope: assigned roster sections", () => {
 
 describe("site admin scope: one site", () => {
   it("POSITIVE: reads every student at their own site", () => {
-    const salinas = user("u_salinas"); // Beaumont
+    const salinas = user("u_salinas"); // Northfield Central
     const visible = visibleStudentIds(salinas);
     const expected = db()
-      .users.filter((u) => u.role === "student" && u.siteId === "site_beaumont")
+      .users.filter((u) => u.role === "student" && u.siteId === "site_northfield")
       .map((u) => u.id);
     expect(visible.sort()).toEqual(expected.sort());
   });
@@ -147,7 +147,7 @@ describe("site admin scope: one site", () => {
   it("NEGATIVE: reads no student at another site", () => {
     const salinas = user("u_salinas");
     const mesaStudents = db()
-      .users.filter((u) => u.role === "student" && u.siteId === "site_colton")
+      .users.filter((u) => u.role === "student" && u.siteId === "site_riverside")
       .map((u) => u.id);
     expect(mesaStudents.length).toBeGreaterThan(0);
     for (const id of mesaStudents) {
@@ -164,8 +164,8 @@ describe("site admin scope: one site", () => {
   });
 
   it("NEGATIVE: cannot manage another site or the organization", () => {
-    expect(canManageSite(user("u_salinas"), "site_beaumont")).toBe(true);
-    expect(canManageSite(user("u_salinas"), "site_colton")).toBe(false);
+    expect(canManageSite(user("u_salinas"), "site_northfield")).toBe(true);
+    expect(canManageSite(user("u_salinas"), "site_riverside")).toBe(false);
     expect(canManagePermissions(user("u_salinas"))).toBe(false);
     expect(canReadAllAudit(user("u_salinas"))).toBe(false);
   });
@@ -182,8 +182,8 @@ describe("org admin scope: the organization", () => {
     const okonjo = user("u_okonjo");
     expect(canReadAllAudit(okonjo)).toBe(true);
     expect(canManagePermissions(okonjo)).toBe(true);
-    expect(canManageSite(okonjo, "site_beaumont")).toBe(true);
-    expect(canManageSite(okonjo, "site_colton")).toBe(true);
+    expect(canManageSite(okonjo, "site_northfield")).toBe(true);
+    expect(canManageSite(okonjo, "site_riverside")).toBe(true);
     expect(readableAudit(okonjo).length).toBeGreaterThan(0);
   });
 
