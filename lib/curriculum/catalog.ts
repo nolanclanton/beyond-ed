@@ -77,6 +77,28 @@ export const SUBJECTS: readonly Subject[] = [
   "Social science",
 ];
 
+/**
+ * Lesson code -> the course it belongs to. Built once from the catalog, so a
+ * lesson's subject is never inferred from its code prefix.
+ */
+const courseByLessonCode = new Map<string, CatalogCourse>();
+for (const course of COURSES) {
+  for (const unit of course.units) {
+    for (const lesson of unit.lessons) {
+      courseByLessonCode.set(lesson.code, course);
+    }
+  }
+}
+
+export function courseForLesson(lessonCode: string): CatalogCourse | undefined {
+  return courseByLessonCode.get(lessonCode);
+}
+
+/** The subject a lesson belongs to, e.g. `Social science` for `H6-U1-L2`. */
+export function subjectForLesson(lessonCode: string): Subject | undefined {
+  return courseByLessonCode.get(lessonCode)?.subject;
+}
+
 /** A course's stable slug. Derived from its title, which is stable. */
 export function courseSlug(title: string): string {
   return title

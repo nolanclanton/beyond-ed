@@ -9,7 +9,12 @@
  * Every write here is idempotent, transactional, and audited in the same
  * transaction as the change.
  */
-import { assessmentId, findLesson, getCourse } from "@/lib/curriculum/catalog";
+import {
+  assessmentId,
+  findLesson,
+  getCourse,
+  subjectForLesson,
+} from "@/lib/curriculum/catalog";
 import { transitionLesson } from "@/lib/curriculum/transitions";
 import type { LessonStatus } from "@/lib/curriculum/lesson-status";
 import { recordAudit, requestIdFor } from "@/lib/audit/log";
@@ -119,9 +124,23 @@ export function setStage(
 /**
  * Builds this student's Spiral Review for a lesson. Deterministic.
  *
- * The candidate pool is restricted to items that exist in the bank, so the
- * SERVER can score every response. The client reports which choice was picked,
- * never whether it was right.
+ * Two rules govern the candidate pool.
+ *
+ * **Same subject, always.** Retrieval practice inside a mathematics lesson is
+ * mathematics. Drawing a history item into a mathematics lesson is not spaced
+ * review, it is an interruption — it breaks the thread the student is holding
+ * and it measures a skill the lesson has no bearing on. The subject comes from
+ * the catalog, not from the lesson code's prefix.
+ *
+ * **Seen OR upcoming.** The blueprint's pool is weak skills, upcoming
+ * prerequisites, and cumulative skills (§4). Restricting candidates to skills
+ * the student has already been assessed on would make the upcoming-prerequisite
+ * pool unreachable, because an upcoming standard is by definition one they have
+ * not met yet.
+ *
+ * The pool is also restricted to items that exist in the bank, so the SERVER can
+ * score every response. The client reports which choice was picked, never
+ * whether it was right.
  */
 export function spiralReviewFor(
   studentId: string,
@@ -131,16 +150,20 @@ export function spiralReviewFor(
   const enrollment = db().enrollments.find((e) => e.id === enrollmentId);
   if (!enrollment) throw new LessonError("That enrollment does not exist.");
 
-  const seenSkills = new Set(currentEvidence({ studentId }).map((e) => e.skill));
-  const candidates = ALL_ITEMS.filter(
-    (i) => seenSkills.has(i.skill) && i.lessonCode !== lessonCode,
-  ).map((i) => ({ itemId: i.id, standard: i.standard, skill: i.skill }));
-
-  return selectSpiralReview(
-    skillProfile(studentId),
-    upcomingStandardsFor(enrollment, lessonCode),
-    candidates,
+  const subject = getCourse(enrollment.courseTitle)?.subject;
+  const upcoming = upcomingStandardsFor(enrollment, lessonCode);
+  const upcomingSet = new Set(upcoming);
+  const seenSkills = new Set(
+    currentEvidence({ studentId }).map((e) => e.skill),
   );
+
+  const candidates = ALL_ITEMS.filter((item) => {
+    if (item.lessonCode === lessonCode) return false;
+    if (subjectForLesson(item.lessonCode) !== subject) return false;
+    return seenSkills.has(item.skill) || upcomingSet.has(item.skill);
+  }).map((i) => ({ itemId: i.id, standard: i.standard, skill: i.skill }));
+
+  return selectSpiralReview(skillProfile(studentId), upcoming, candidates);
 }
 
 /** Records the Spiral Review result. Retrieval practice, not a grade. */
