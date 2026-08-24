@@ -13,7 +13,7 @@
  * imported here (CLAUDE.md §4). This module reads `/lib/grades` only.
  */
 import { courseLessons, getCourse } from "@/lib/curriculum/catalog";
-import { db } from "@/lib/db/store";
+import { db, lessonStatesFor } from "@/lib/db/store";
 import type { Enrollment, User } from "@/lib/db/types";
 import { categoriesFor, courseGrade, currentGradeRecords } from "@/lib/grades/gradebook";
 import { MIN_GROUP_SIZE } from "@/lib/rules/versions";
@@ -36,10 +36,9 @@ export type CourseMetrics = {
 };
 
 export function courseMetrics(enrollment: Enrollment): CourseMetrics {
-  const d = db();
   const course = getCourse(enrollment.courseTitle);
   const lessons = course ? courseLessons(course) : [];
-  const states = d.lessonStates.filter((s) => s.enrollmentId === enrollment.id);
+  const states = lessonStatesFor(enrollment.id);
 
   const completeCodes = new Set(
     states.filter((s) => s.status === "completed").map((s) => s.lessonCode),
@@ -135,7 +134,7 @@ export function studentMetrics(student: User): StudentMetrics {
     const course = getCourse(enrollment.courseTitle);
     if (!course) continue;
     const lessons = courseLessons(course);
-    const states = d.lessonStates.filter((s) => s.enrollmentId === enrollment.id);
+    const states = lessonStatesFor(enrollment.id);
     const currentCode = states.find(
       (s) => s.status !== "locked" && s.status !== "completed",
     )?.lessonCode;

@@ -4,15 +4,8 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import {
   assessmentDescription,
-  assessmentId,
   findLesson,
   getCourse,
-  interventionId,
-  interventionTarget,
-  primaryStandards,
-  standardCode,
-  standardTag,
-  STANDARD_TAG_MEANING,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STAGES, LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
 import { itemsFor } from "@/lib/db/demo-items";
@@ -29,9 +22,9 @@ import {
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { spiralReviewFor } from "@/lib/learning/lesson";
-import { MINUTES_CAVEAT } from "@/lib/intervention/library";
-import { EXIT_BANDS, RULE_VERSIONS } from "@/lib/rules/versions";
+import { EXIT_BANDS } from "@/lib/rules/versions";
 import { locationFor } from "@/lib/views/student";
+import { focusForLesson, lessonLabel, skillLabel } from "@/lib/views/learning-focus";
 import { recommendationsForEnrollment } from "@/lib/intervention/queue";
 import { itemById } from "@/lib/db/demo-items";
 
@@ -80,8 +73,8 @@ export default async function LessonPage({
   const status = state?.status ?? "locked";
   const presentation = LESSON_STATUS_PRESENTATION[status];
   const content = lessonContent(lessonCode);
+  const focus = focusForLesson(lessonCode);
   const exitItems = itemsFor(lessonCode, "exit_ticket");
-  const version = d.courseVersions.find((v) => v.id === enrollment.courseVersionId);
 
   const stage = Math.min(10, Math.max(1, Number(stageParam ?? state?.stage ?? 1) || 1));
   const started = status === "in_progress" || status === "submitted";
@@ -91,7 +84,11 @@ export default async function LessonPage({
   if (status === "locked") {
     return (
       <div className="py-6">
-        <Breadcrumb course={course.title} enrollmentId={enrollmentId} lessonCode={lessonCode} />
+        <Breadcrumb
+          course={course.title}
+          enrollmentId={enrollmentId}
+          title={lessonLabel(lessonCode)}
+        />
         <h1 className="mt-3 text-2xl font-bold text-ink">{location.topic}</h1>
         <div className="mt-4">
           <Banner title="This lesson is locked." tone="neutral">
@@ -118,7 +115,11 @@ export default async function LessonPage({
 
   return (
     <div className="py-6">
-      <Breadcrumb course={course.title} enrollmentId={enrollmentId} lessonCode={lessonCode} />
+      <Breadcrumb
+          course={course.title}
+          enrollmentId={enrollmentId}
+          title={lessonLabel(lessonCode)}
+        />
 
       <header className="mt-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -126,77 +127,46 @@ export default async function LessonPage({
             label={presentation.label}
             tone={finished ? "positive" : started ? "info" : "neutral"}
           />
-          <span className="font-mono text-xs text-ink-muted">{lessonCode}</span>
           <span className="text-xs text-ink-muted">
-            Days {found.lesson.dayRange} ({found.lesson.days})
+            {focus?.position} &middot; about {found.lesson.days} class{" "}
+            {found.lesson.days === 1 ? "day" : "days"}
           </span>
         </div>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">{location.topic}</h1>
-        <p className="mt-1.5 text-base text-ink-muted">
-          {location.instructionalSection} &middot; Unit {found.unit.id}: {found.unit.name}
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+          {location.topic}
+        </h1>
+        <p className="mt-2 max-w-2xl text-lg text-ink-muted">
+          {focus?.description}
         </p>
-        <p className="mt-1 text-sm text-ink-muted">{presentation.studentMeaning}</p>
+        <p className="mt-2 text-sm text-ink-muted">
+          Unit {found.unit.id}: {found.unit.name} &middot; {presentation.studentMeaning}
+        </p>
       </header>
 
       <div className="mt-5">
         <Card className="p-5">
+          {/*
+            No standard codes, assessment ids, support ids, or rule versions.
+            Those are staff vocabulary — a teacher needs them to trace coverage,
+            a student does not, and showing them makes ordinary learning look
+            like paperwork (CLAUDE.md §13).
+          */}
           <FactList
             columns={3}
             items={[
               {
-                label: "Primary standards",
-                value:
-                  primaryStandards(found.lesson).length === 0 ? (
-                    "Readiness evidence — no new primary standard"
-                  ) : (
-                    <ul className="flex flex-col gap-0.5">
-                      {primaryStandards(found.lesson).map((s) => {
-                        const tag = standardTag(s);
-                        return (
-                          <li key={s}>
-                            <span className="font-mono">{standardCode(s)}</span>
-                            {tag ? (
-                              <span
-                                className="ml-1.5 text-xs text-ink-muted"
-                                title={STANDARD_TAG_MEANING[tag] ?? tag}
-                              >
-                                [{tag}]
-                              </span>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ),
+                label: "What you are learning",
+                value: focus?.description ?? location.topic,
               },
               {
-                label: "Required evidence",
-                value: (
-                  <>
-                    <span className="font-mono text-xs">{assessmentId(found.lesson)}</span>
-                    <span className="block">{assessmentDescription(found.lesson)}</span>
-                  </>
-                ),
+                label: "Where you are",
+                value: `${focus?.position ?? ""}${
+                  found.unit.name ? ` in ${found.unit.name}` : ""
+                }`,
               },
               {
-                label: "Linked support if you get stuck",
-                value: (
-                  <>
-                    <span className="font-mono text-xs">{interventionId(found.lesson)}</span>
-                    <span className="block">{interventionTarget(found.lesson)}</span>
-                  </>
-                ),
-              },
-              { label: "Course version", value: version?.version ?? "unknown" },
-              {
-                label: "Attempts on the Exit Ticket",
-                value: `${state?.attempts ?? 0}`,
-              },
-              {
-                label: "Decision rules in force",
-                value: (
-                  <span className="font-mono text-xs">{RULE_VERSIONS.exitBands}</span>
-                ),
+                label: "What you will show",
+                value: assessmentDescription(found.lesson),
               },
             ]}
           />
@@ -205,20 +175,18 @@ export default async function LessonPage({
 
       {!content ? (
         <div className="mt-5">
-          <Banner title="Instruction for this lesson has not been authored." tone="notice">
-            The curriculum record above is real — it comes from the standards-to-lesson
-            alignment matrix. The teaching text, worked model, and practice items for
-            this lesson do not exist yet, so the stages below show the record rather
-            than a lesson, and the Exit Ticket cannot be scored.
+          <Banner title="This lesson has not been written yet." tone="notice">
+            Where it sits in the course is real. The teaching, the worked
+            example, and the practice questions do not exist yet, so there is
+            nothing here to work through and nothing to turn in.
           </Banner>
         </div>
       ) : (
         <div className="mt-5">
-          <Banner title="Demonstration content." tone="neutral">
-            The standards, assessment record, and linked support above come from the
-            curriculum. The teaching text and items below were written to demonstrate
-            the lesson player and have not been reviewed or adopted by a curriculum
-            author.
+          <Banner title="Example lesson." tone="neutral">
+            Where this lesson sits in the course is real. The teaching and the
+            questions below were written to show how a lesson works, and have not
+            yet been reviewed by a teacher.
           </Banner>
         </div>
       )}
@@ -264,14 +232,12 @@ export default async function LessonPage({
                 rationale: i.rationale,
                 correctChoiceId: i.correctChoiceId,
               }))}
-              lessonSequence={found.lesson.sequence}
               assessment={assessmentDescription(found.lesson)}
               status={status}
               attempts={state?.attempts ?? 0}
               recommendationSummaries={recommendations.map((r) => ({
                 skill: r.skill,
                 summary: r.triggerSummary,
-                support: r.interventionLessonId,
                 minutes: r.estimatedMinutes,
               }))}
             />
@@ -285,11 +251,11 @@ export default async function LessonPage({
 function Breadcrumb({
   course,
   enrollmentId,
-  lessonCode,
+  title,
 }: {
   course: string;
   enrollmentId: string;
-  lessonCode: string;
+  title: string;
 }) {
   return (
     <nav aria-label="Breadcrumb" className="text-sm text-ink-muted">
@@ -304,7 +270,7 @@ function Breadcrumb({
         {course}
       </Link>
       <span aria-hidden="true"> / </span>
-      <span className="font-mono text-ink">{lessonCode}</span>
+      <span className="text-ink">{title}</span>
     </nav>
   );
 }
@@ -366,14 +332,12 @@ type StageBodyProps = {
     rationale?: string;
     correctChoiceId?: string;
   }[];
-  lessonSequence: string;
   assessment: string;
   status: string;
   attempts: number;
   recommendationSummaries: {
     skill: string;
     summary: string;
-    support: string;
     minutes: number;
   }[];
 };
@@ -384,8 +348,7 @@ function StageBody(props: StageBodyProps) {
 
   const notAuthored = (
     <Empty>
-      This stage has no authored content for this lesson. The curriculum record
-      specifies: {props.lessonSequence}
+      This part of the lesson has not been written yet.
     </Empty>
   );
 
@@ -449,9 +412,7 @@ function StageBody(props: StageBodyProps) {
                       {line}
                     </p>
                   ))}
-                  <p className="mt-2 font-mono text-xs text-ink-muted">
-                    Selection rule {RULE_VERSIONS.spiralReview}
-                  </p>
+
                 </div>
                 <SpiralReviewRunner
                   items={props.spiralItems}
@@ -650,9 +611,9 @@ function StageBody(props: StageBodyProps) {
           />
           <div className="p-5">
             {props.exitItems.length === 0 ? (
-              <Banner title="This Exit Ticket has no authored items." tone="notice">
-                There is nothing to submit, so no result can be produced for this
-                lesson. The band table below is still the rule that would apply.
+              <Banner title="This Exit Ticket has not been written yet." tone="notice">
+                There is nothing to turn in here yet. How a result is read is
+                still shown below.
               </Banner>
             ) : props.status === "review_scheduled" ||
               props.status === "passed" ||
@@ -680,7 +641,7 @@ function StageBody(props: StageBodyProps) {
             )}
 
             <div className="mt-8">
-              <SectionHeading hint={`Decision rule ${RULE_VERSIONS.exitBands}`}>
+              <SectionHeading hint="The same bands apply to every lesson, for everyone.">
                 How the result is read
               </SectionHeading>
               <ul className="divide-y divide-line rounded-lg border border-line">
@@ -735,11 +696,13 @@ function StageBody(props: StageBodyProps) {
                 <ul className="flex flex-col gap-3">
                   {props.recommendationSummaries.map((r) => (
                     <li key={r.skill} className="rounded-lg border border-line px-4 py-3">
-                      <p className="text-sm font-semibold text-ink">{r.skill}</p>
+                      <p className="text-sm font-semibold text-ink">
+                        {skillLabel(r.skill)}
+                      </p>
                       <p className="mt-0.5 text-sm text-ink-muted">{r.summary}</p>
                       <p className="mt-1.5 text-xs text-ink-muted">
-                        Suggested support <span className="font-mono">{r.support}</span>,
-                        about {r.minutes} minutes. {MINUTES_CAVEAT}
+                        A short piece of work, about {r.minutes} minutes, if your
+                        teacher decides it would help.
                       </p>
                     </li>
                   ))}

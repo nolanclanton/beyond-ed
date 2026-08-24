@@ -14,7 +14,8 @@ import {
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { evidenceByIds } from "@/lib/evidence/ledger";
-import { entryById, MINUTES_CAVEAT } from "@/lib/intervention/library";
+import { lessonLabel, skillLabel } from "@/lib/views/learning-focus";
+import { entryById } from "@/lib/intervention/library";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { ANTI_LOOP_MAX_CYCLES } from "@/lib/rules/versions";
 
@@ -66,7 +67,7 @@ export default async function SupportPage({
           Review
         </Link>
         <span aria-hidden="true"> / </span>
-        <span className="font-mono text-ink">{plan.interventionLessonId}</span>
+        <span className="text-ink">{entry?.target ?? "Extra help"}</span>
       </nav>
 
       <header className="mt-3">
@@ -77,7 +78,7 @@ export default async function SupportPage({
           </span>
         </div>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">
-          {entry?.target ?? plan.interventionLessonId}
+          {entry?.target ?? "Extra help"}
         </h1>
         <p className="mt-1.5 text-base text-ink-muted">{presentation.studentMeaning}</p>
       </header>
@@ -88,7 +89,7 @@ export default async function SupportPage({
             When you finish, you go straight back here
           </p>
           <p className="mt-1.5 text-lg font-semibold text-ink">
-            {plan.returnLessonCode}, stage {plan.returnStage}
+            {lessonLabel(plan.returnLessonCode)}
           </p>
           <p className="mt-1 text-sm text-ink-muted">
             This pauses your grade-level lesson. It does not replace it, and you
@@ -102,18 +103,14 @@ export default async function SupportPage({
           <FactList
             columns={2}
             items={[
-              { label: "Skill", value: standard },
+              { label: "What this is about", value: skillLabel(plan.targetSkill) },
               {
-                label: "Return rule",
-                value: `${plan.readinessMinPercent}% on the readiness check plus ${plan.transferItemsRequired} transfer item`,
-              },
-              {
-                label: "Rule version",
-                value: <span className="font-mono text-xs">{plan.returnRuleVersion}</span>,
+                label: "What you need to show",
+                value: `${plan.readinessMinPercent}% on a short check, plus ${plan.transferItemsRequired} question that uses it in your current work`,
               },
               {
                 label: "Rounds so far",
-                value: `${plan.cycles} of ${ANTI_LOOP_MAX_CYCLES} before it goes to your teacher`,
+                value: `${plan.cycles} of ${ANTI_LOOP_MAX_CYCLES} before your teacher picks it up`,
               },
             ]}
           />
@@ -126,15 +123,13 @@ export default async function SupportPage({
               <ul className="mt-2 space-y-1 text-xs text-ink-muted">
                 {triggers.map((t) => (
                   <li key={t.id}>
-                    {t.lessonCode} &middot; {t.skill} &middot;{" "}
-                    {t.correct ? "correct" : "missed"}
-                    {t.errorCode ? ` (${t.errorCode.replace(/-/g, " ")})` : ""}
+                    {lessonLabel(t.lessonCode)}
+                    {t.correct ? " — you got this one" : " — this one did not go through"}
                   </li>
                 ))}
               </ul>
             ) : null}
           </div>
-          <p className="mt-3 text-xs text-ink-muted">{MINUTES_CAVEAT}</p>
         </Card>
       </div>
 
@@ -148,15 +143,15 @@ export default async function SupportPage({
       ) : plan.status === "returned_to_pathway" || plan.status === "closed" ? (
         <div className="mt-6">
           <Banner title="Finished." tone="positive">
-            You are back in {plan.returnLessonCode}.
+            You are back in{" "}
+            {lessonLabel(plan.returnLessonCode)}.
           </Banner>
         </div>
       ) : readiness.length < 2 || !transfer ? (
         <div className="mt-6">
-          <Banner title="This support has no authored items yet." tone="notice">
-            The plan above is real — the trigger evidence, the return rule, and the
-            return destination all come from your record. The lesson itself has not
-            been written, so there is nothing to complete here.
+          <Banner title="This help has not been written yet." tone="notice">
+            Why you have it and where you go back to are real. The activity
+            itself does not exist yet, so there is nothing to work through here.
           </Banner>
         </div>
       ) : (
@@ -296,8 +291,8 @@ export default async function SupportPage({
                       }
                     >
                       {(plan.readinessPercent ?? 0) >= plan.readinessMinPercent
-                        ? `That clears the ${plan.readinessMinPercent}% bar. One transfer item and you are back in ${plan.returnLessonCode}.`
-                        : `Under the ${plan.readinessMinPercent}% bar. Do the transfer item anyway — the return rule needs both, and your teacher sees both results.`}
+                        ? `That clears the ${plan.readinessMinPercent}% mark. One more question and you are back in your lesson.`
+                        : `Under the ${plan.readinessMinPercent}% mark. Do the next question anyway — both count, and your teacher sees both.`}
                     </Banner>
                   </div>
                   <TransferForm

@@ -14,6 +14,7 @@ import {
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { coursesFor, messagesFor } from "@/lib/views/student";
+import { focusForLesson } from "@/lib/views/learning-focus";
 
 import { HelpRequestForm } from "./help-form";
 import { VocabularyReview, type VocabCard } from "./vocabulary-review";
@@ -186,7 +187,7 @@ export default async function SupportPage() {
                 <Card key={location.lesson.code}>
                   <CardHeader
                     title={`${location.courseTitle} — ${location.topic}`}
-                    hint={`${location.lesson.code} · ${location.instructionalSection}`}
+                    hint={focusForLesson(location.lesson.code)?.description}
                   />
                   <div className="p-5">
                     {!content ? (

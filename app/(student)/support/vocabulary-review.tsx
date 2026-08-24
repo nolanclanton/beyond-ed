@@ -44,7 +44,7 @@ export function VocabularyReview({ cards }: { cards: VocabCard[] }) {
     <div>
       <Card className="p-6">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          {card.courseTitle} · {card.lessonCode}
+          {card.courseTitle}
         </p>
         <p className="mt-2 text-2xl font-bold tracking-tight text-ink">{card.term}</p>
 

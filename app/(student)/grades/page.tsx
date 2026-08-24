@@ -16,9 +16,9 @@ import {
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { DEFAULT_SCALE, courseGrade, gradeHistory } from "@/lib/grades/gradebook";
-import { RULE_VERSIONS } from "@/lib/rules/versions";
 import { studentMetrics } from "@/lib/views/metrics";
 import { coursesFor } from "@/lib/views/student";
+import { lessonLabel } from "@/lib/views/learning-focus";
 
 export const metadata: Metadata = {
   title: "Grades · Beyond.Ed",
@@ -147,7 +147,7 @@ export default async function GradesPage({
               <Card key={progress.enrollment.id}>
                 <CardHeader
                   title={progress.course.title}
-                  hint={`Course version ${progress.courseVersion} · calculated with ${grade.ruleVersion}`}
+                  hint={`${progress.course.subject} · ${progress.course.units.length} units`}
                   action={
                     <div className="text-right">
                       <p className="text-2xl font-bold text-ink">
@@ -218,7 +218,6 @@ export default async function GradesPage({
                       <table className="mt-2 w-full min-w-[40rem] border-collapse text-sm">
                         <thead>
                           <tr className="border-b border-line text-left">
-                            <th scope="col" className="py-2 pr-4 font-semibold text-ink">Assessment</th>
                             <th scope="col" className="py-2 pr-4 font-semibold text-ink">Lesson</th>
                             <th scope="col" className="py-2 pr-4 font-semibold text-ink">Result</th>
                             <th scope="col" className="py-2 pr-4 font-semibold text-ink">Recorded</th>
@@ -231,10 +230,9 @@ export default async function GradesPage({
                             const isSuperseded = superseded.has(record.id);
                             return (
                               <tr key={record.id} className={isSuperseded ? "text-ink-muted" : ""}>
-                                <th scope="row" className="py-2 pr-4 text-left font-mono text-xs font-medium">
-                                  {record.assessmentId}
+                                <th scope="row" className="py-2 pr-4 text-left text-sm font-medium">
+                                  {lessonLabel(record.lessonCode)}
                                 </th>
-                                <td className="py-2 pr-4 font-mono text-xs">{record.lessonCode}</td>
                                 <td className="py-2 pr-4">
                                   {record.pointsEarned} of {record.pointsPossible}
                                 </td>
@@ -309,8 +307,8 @@ export default async function GradesPage({
                           <ul className="mt-1.5 space-y-0.5">
                             {rows.map((r) => (
                               <li key={r.id} className="text-xs text-ink-muted">
-                                <span className="font-mono">{r.lessonCode}</span> ·{" "}
-                                {r.assessmentId} · {r.pointsEarned}/{r.pointsPossible}
+                                {lessonLabel(r.lessonCode)} ·{" "}
+                                {r.pointsEarned}/{r.pointsPossible}
                               </li>
                             ))}
                           </ul>
@@ -330,7 +328,7 @@ export default async function GradesPage({
           <Card>
             <CardHeader
               title="How a grade is produced"
-              hint={`Grading rule ${RULE_VERSIONS.grading}. Stored with every record so a past result recomputes exactly.`}
+              hint="The same method is used for everyone, in every course."
             />
             <div className="p-5">
               <ol className="list-decimal space-y-2 pl-5 text-sm text-ink">

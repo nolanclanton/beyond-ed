@@ -18,12 +18,13 @@ import {
   type CatalogUnit,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STATUS_PRESENTATION, type LessonStatus } from "@/lib/curriculum/lesson-status";
-import { db } from "@/lib/db/store";
+import { db, lessonStatesFor } from "@/lib/db/store";
 import { hasExitTicket } from "@/lib/db/demo-items";
 import type { Enrollment, Intervention, TeacherMessage, User } from "@/lib/db/types";
 import { currentEvidence } from "@/lib/evidence/ledger";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { interventionsForStudent } from "@/lib/intervention/lifecycle";
+import { focusForLesson } from "./learning-focus";
 
 export type PathwayLocation = {
   enrollmentId: string;
@@ -91,8 +92,7 @@ export function resumeLocation(enrollment: Enrollment): PathwayLocation | null {
   const course = getCourse(enrollment.courseTitle);
   if (!course) return null;
   const order = courseLessons(course).map((l) => l.code);
-  const states = db()
-    .lessonStates.filter((s) => s.enrollmentId === enrollment.id)
+  const states = lessonStatesFor(enrollment.id)
     .sort((a, b) => order.indexOf(a.lessonCode) - order.indexOf(b.lessonCode));
 
   // Prefer a lesson that is actually open. A lesson sitting in "review
@@ -116,7 +116,7 @@ export function coursesFor(student: User): CourseProgress[] {
       const course = getCourse(enrollment.courseTitle);
       if (!course) return null;
       const lessons = courseLessons(course);
-      const states = d.lessonStates.filter((s) => s.enrollmentId === enrollment.id);
+      const states = lessonStatesFor(enrollment.id);
       const done = states.filter(
         (s) => s.status === "completed" || s.status === "review_scheduled" || s.status === "passed",
       );
@@ -194,14 +194,16 @@ export function priorityActions(student: User): PriorityAction[] {
     if (!location) continue;
     if (location.status === "review_scheduled") continue;
     const presentation = LESSON_STATUS_PRESENTATION[location.status];
-    const standards = location.standards.length
-      ? location.standards.join(", ")
-      : "readiness evidence, with no new primary standard";
+    // Plain language, no standard codes: a student is told what they will
+    // learn, not which coverage record it satisfies (CLAUDE.md §13).
+    const focus = focusForLesson(location.lesson.code);
     out.push({
       kind: "lesson",
       id: `${location.enrollmentId}:${location.lesson.code}`,
       title: `${progress.course.title}: ${location.topic}`,
-      reason: `This is the next lesson on your pathway. It covers ${standards}, and it is the part of the unit where you ${location.instructionalSection.charAt(0).toLowerCase()}${location.instructionalSection.slice(1)}.`,
+      reason:
+        focus?.description ??
+        `This is the next lesson in ${location.unit.name}.`,
       effort:
         location.lesson.days === 1
           ? "A single course day"
@@ -254,7 +256,7 @@ export function alertsFor(student: User): StudentAlert[] {
         tone: "info",
         title: `${progress.course.title}: this lesson has no assessment items yet`,
         detail:
-          "The lesson structure and standards are here, but its items have not been authored, so there is nothing to submit.",
+          "The lesson is here, but its questions have not been written yet, so there is nothing to turn in.",
         href: location.href,
       });
     }

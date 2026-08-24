@@ -6,6 +6,7 @@ import { Card, CardHeader, Meter, SectionHeading, StatusChip } from "@/lib/desig
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
 import { coursesFor } from "@/lib/views/student";
+import { focusForLesson } from "@/lib/views/learning-focus";
 
 export const metadata: Metadata = {
   title: "Learn · Beyond.Ed",
@@ -42,29 +43,28 @@ export default async function LearnPage() {
                   <Card key={progress.enrollment.id}>
                     <CardHeader
                       title={progress.course.title}
-                      hint={`Course version ${progress.courseVersion} · ${progress.course.units.length} units · ${progress.daysTotal} pathway days`}
+                      hint={`${progress.course.units.length} units · ${progress.daysTotal} class days this year`}
                     />
                     <div className="p-5">
                       <Meter
                         percent={(progress.daysCompleted / progress.daysTotal) * 100}
                         tone="info"
-                        label={`${progress.daysCompleted} of ${progress.daysTotal} pathway days`}
+                        label={`${progress.daysCompleted} of ${progress.daysTotal} class days`}
                       />
                       {location ? (
                         <div className="mt-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusChip
-                              label={presentation?.label ?? ""}
-                              tone={presentation ? "info" : "neutral"}
-                            />
-                            <span className="text-xs text-ink-muted">
-                              {location.lesson.code}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm text-ink">{location.topic}</p>
-                          <p className="mt-0.5 text-xs text-ink-muted">
-                            Unit {location.unit.id}: {location.unit.name} &middot;{" "}
-                            {location.instructionalSection}
+                          <StatusChip
+                            label={presentation?.label ?? ""}
+                            tone={presentation ? "info" : "neutral"}
+                          />
+                          <p className="mt-2 text-base font-semibold text-ink">
+                            {location.topic}
+                          </p>
+                          <p className="mt-0.5 text-sm text-ink-muted">
+                            {focusForLesson(location.lesson.code)?.description}
+                          </p>
+                          <p className="mt-1 text-xs text-ink-muted">
+                            Unit {location.unit.id}: {location.unit.name}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-4">
                             <Link

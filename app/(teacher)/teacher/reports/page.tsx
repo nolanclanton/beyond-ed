@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
 import { courseLessons, getCourse } from "@/lib/curriculum/catalog";
-import { db } from "@/lib/db/store";
+import { db, lessonStatesFor } from "@/lib/db/store";
 import {
   Banner,
   Card,
@@ -42,7 +42,7 @@ export default async function ReportsPage() {
       .filter((e) => e.sectionId === section.id)
       .map((e) => {
         const student = d.users.find((u) => u.id === e.studentId);
-        const states = d.lessonStates.filter((s) => s.enrollmentId === e.id);
+        const states = lessonStatesFor(e.id);
         const doneCodes = new Set(
           states.filter((s) => s.status === "completed").map((s) => s.lessonCode),
         );

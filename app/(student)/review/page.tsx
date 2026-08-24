@@ -14,8 +14,9 @@ import {
 import { supportIsRunnable } from "@/lib/db/demo-items";
 import { interventionsForStudent } from "@/lib/intervention/lifecycle";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
-import { entryById, MINUTES_CAVEAT } from "@/lib/intervention/library";
+import { entryById } from "@/lib/intervention/library";
 import { evidenceByIds } from "@/lib/evidence/ledger";
+import { lessonLabel, skillLabel } from "@/lib/views/learning-focus";
 
 export const metadata: Metadata = {
   title: "Review · Beyond.Ed",
@@ -69,8 +70,8 @@ export default async function ReviewPage() {
               return (
                 <Card as="li" key={plan.id}>
                   <CardHeader
-                    title={entry?.target ?? plan.interventionLessonId}
-                    hint={`${plan.interventionLessonId} · about ${plan.estimatedMinutes} minutes`}
+                    title={entry?.target ?? "Extra help"}
+                    hint={`About ${plan.estimatedMinutes} minutes`}
                     action={<StatusChip label={presentation.label} tone={presentation.tone} />}
                   />
                   <div className="p-5">
@@ -85,9 +86,8 @@ export default async function ReviewPage() {
                         <ul className="mt-2 space-y-1 text-xs text-ink-muted">
                           {triggers.map((t) => (
                             <li key={t.id}>
-                              {t.lessonCode} &middot; {t.skill} &middot;{" "}
-                              {t.correct ? "correct" : "missed"}
-                              {t.errorCode ? ` (${t.errorCode.replace(/-/g, " ")})` : ""}
+                              {lessonLabel(t.lessonCode)}
+                              {t.correct ? " — you got this one" : " — this one did not go through"}
                             </li>
                           ))}
                         </ul>
@@ -97,10 +97,10 @@ export default async function ReviewPage() {
                     <div className="mt-4">
                       <FactList
                         items={[
-                          { label: "Skill", value: plan.targetStandard ?? plan.targetSkill },
+                          { label: "What this is about", value: skillLabel(plan.targetSkill) },
                           {
                             label: "You go back to",
-                            value: `${plan.returnLessonCode}, stage ${plan.returnStage}`,
+                            value: lessonLabel(plan.returnLessonCode),
                           },
                           {
                             label: "What you have to show",
@@ -110,8 +110,6 @@ export default async function ReviewPage() {
                         ]}
                       />
                     </div>
-
-                    <p className="mt-3 text-xs text-ink-muted">{MINUTES_CAVEAT}</p>
 
                     <div className="mt-5">
                       {plan.status === "escalated" ? (
@@ -124,10 +122,10 @@ export default async function ReviewPage() {
                           {plan.status === "assigned" ? "Start this support" : "Continue"}
                         </ButtonLink>
                       ) : (
-                        <Banner title="This support has no authored items yet." tone="notice">
-                          The plan, the return rule, and the return destination are
-                          real. The lesson content and its readiness check have not
-                          been written, so there is nothing to complete here yet.
+                        <Banner title="This help has not been written yet." tone="notice">
+                          Why you have it and where you go back to are real. The
+                          activity itself does not exist yet, so there is nothing
+                          to work through here.
                         </Banner>
                       )}
                     </div>
@@ -151,21 +149,15 @@ export default async function ReviewPage() {
               const presentation = INTERVENTION_STATUS_PRESENTATION[plan.status];
               return (
                 <Card as="li" key={plan.id} className="p-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusChip label={presentation.label} tone={presentation.tone} />
-                    <span className="font-mono text-xs text-ink-muted">
-                      {plan.interventionLessonId}
-                    </span>
-                  </div>
+                  <StatusChip label={presentation.label} tone={presentation.tone} />
                   <p className="mt-2 text-sm font-semibold text-ink">
-                    {plan.targetStandard ?? plan.targetSkill}
+                    {skillLabel(plan.targetSkill)}
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">{presentation.studentMeaning}</p>
                   {plan.readinessPercent !== null ? (
                     <p className="mt-2 text-xs text-ink-muted">
-                      Readiness check {plan.readinessPercent}% &middot; transfer{" "}
-                      {plan.transferPassed ? "passed" : "not passed"} &middot; returned to{" "}
-                      {plan.returnLessonCode}
+                      Short check {plan.readinessPercent}% &middot; the follow-up question{" "}
+                      {plan.transferPassed ? "went through" : "did not go through"}
                     </p>
                   ) : null}
                 </Card>

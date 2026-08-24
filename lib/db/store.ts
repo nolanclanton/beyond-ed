@@ -116,6 +116,9 @@ export function db(): Database {
 /** Wipes and re-marks the store as unseeded. Used by the seeder and by tests. */
 export function clearDatabase(): void {
   g[GLOBAL_KEY] = emptyDatabase();
+  lessonStateIndex = null;
+  lessonStateSource = null;
+  lessonStateLength = -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,4 +257,48 @@ export function withIdempotency<T extends { id: string }>(
 
 export function wasAlreadyApplied(key: string): string | undefined {
   return db().idempotency.get(key);
+}
+
+// ---------------------------------------------------------------------------
+// Lesson-state lookup
+// ---------------------------------------------------------------------------
+
+/**
+ * Lesson states by enrollment, memoised.
+ *
+ * Unlike evidence and grades, lesson states are MUTATED in place — a status
+ * moves through its guarded transition — so this cannot be maintained on write
+ * the way the append-only indexes are. Instead it is rebuilt whenever the
+ * underlying array could have changed identity or length:
+ *
+ *   - a seed pushes rows, which changes the length;
+ *   - a rolled-back `transact` replaces the array with fresh copies, which
+ *     changes its identity and would otherwise leave the index pointing at
+ *     objects no longer in the store.
+ *
+ * In-place status changes alter neither, and need no rebuild, because the index
+ * holds the same object references the store does.
+ */
+let lessonStateIndex: Map<string, LessonState[]> | null = null;
+let lessonStateSource: LessonState[] | null = null;
+let lessonStateLength = -1;
+
+export function lessonStatesFor(enrollmentId: string): LessonState[] {
+  const d = db();
+  if (
+    lessonStateIndex === null ||
+    lessonStateSource !== d.lessonStates ||
+    lessonStateLength !== d.lessonStates.length
+  ) {
+    const next = new Map<string, LessonState[]>();
+    for (const state of d.lessonStates) {
+      const list = next.get(state.enrollmentId);
+      if (list) list.push(state);
+      else next.set(state.enrollmentId, [state]);
+    }
+    lessonStateIndex = next;
+    lessonStateSource = d.lessonStates;
+    lessonStateLength = d.lessonStates.length;
+  }
+  return lessonStateIndex.get(enrollmentId) ?? [];
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
+import { assessmentDescription } from "@/lib/curriculum/catalog";
 import { db } from "@/lib/db/store";
 import {
   Banner,
@@ -179,18 +180,19 @@ export default async function TodayPage() {
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-sm font-semibold text-ink">{progress.course.title}</p>
                   <p className="text-xs text-ink-muted">
-                    {progress.daysCompleted} of {progress.daysTotal} pathway days
+                    {progress.daysCompleted} of {progress.daysTotal} class days
                   </p>
                 </div>
                 {progress.current ? (
                   <p className="mt-1 text-sm text-ink-muted">
-                    <Link href={progress.current.href} className={`font-medium text-primary underline underline-offset-4 ${FOCUS_RING}`}>
-                      {progress.current.lesson.code}
-                    </Link>{" "}
-                    &mdash; {progress.current.topic}
+                    <Link
+                      href={progress.current.href}
+                      className={`font-medium text-primary underline underline-offset-4 ${FOCUS_RING}`}
+                    >
+                      {progress.current.topic}
+                    </Link>
                     <span className="block text-xs">
-                      Unit {progress.current.unit.id}: {progress.current.unit.name} &middot;{" "}
-                      {progress.current.instructionalSection}
+                      Unit {progress.current.unit.id}: {progress.current.unit.name}
                     </span>
                   </p>
                 ) : (
@@ -292,12 +294,9 @@ function PrimaryAction({ action }: { action: PriorityAction }) {
                     : action.location.instructionalSection,
                 },
                 {
-                  label: "Standards",
-                  value: action.location.standards.length
-                    ? action.location.standards.join(", ")
-                    : "Readiness evidence — no new primary standard",
+                  label: "What you will show",
+                  value: assessmentDescription(action.location.lesson),
                 },
-                { label: "Course version", value: action.location.courseVersion },
               ]}
             />
           </div>

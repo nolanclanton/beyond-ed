@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { assertCanReadStudent } from "@/lib/auth/scope";
 import { formatDateTime } from "@/lib/clock";
 import { assessmentId, courseLessons, getCourse } from "@/lib/curriculum/catalog";
-import { db } from "@/lib/db/store";
+import { db, lessonStatesFor } from "@/lib/db/store";
 import {
   Banner,
   Card,
@@ -150,7 +150,7 @@ export default async function Student360Page({
                 {enrollments.map((e) => {
                   const course = getCourse(e.courseTitle);
                   const version = d.courseVersions.find((v) => v.id === e.courseVersionId);
-                  const states = d.lessonStates.filter((s) => s.enrollmentId === e.id);
+                  const states = lessonStatesFor(e.id);
                   const active = states.find(
                     (s) => s.status === "available" || s.status === "in_progress",
                   );
@@ -192,7 +192,7 @@ export default async function Student360Page({
             {enrollments.map((e) => {
               const course = getCourse(e.courseTitle);
               if (!course) return null;
-              const states = d.lessonStates.filter((s) => s.enrollmentId === e.id);
+              const states = lessonStatesFor(e.id);
               return (
                 <Card key={e.id}>
                   <CardHeader title={e.courseTitle} hint={`${course.units.length} units`} />

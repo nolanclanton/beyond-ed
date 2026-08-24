@@ -23,8 +23,8 @@ import {
   READINESS_BANDS,
   skillProfile,
 } from "@/lib/mastery/profile";
-import { RULE_VERSIONS } from "@/lib/rules/versions";
 import { coursesFor, evidenceFor } from "@/lib/views/student";
+import { focusForSkill, lessonLabel, skillLabel } from "@/lib/views/learning-focus";
 import { interventionsForStudent } from "@/lib/intervention/lifecycle";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 
@@ -107,7 +107,7 @@ export default async function ProgressPage() {
       </section>
 
       <section aria-labelledby="subjects" className="mt-10">
-        <SectionHeading id="subjects" hint="Your full schedule, including what the catalog does not carry yet.">
+        <SectionHeading id="subjects" hint="What you are taking this year.">
           Subjects
         </SectionHeading>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -119,9 +119,8 @@ export default async function ProgressPage() {
                 <p className="text-sm font-semibold text-ink">{subject}</p>
                 {!offered ? (
                   <p className="mt-1 text-xs text-ink-muted">
-                    Not in the curriculum catalog yet. The blueprint&rsquo;s initial
-                    core catalog is mathematics, English, science, and social
-                    science.
+                    Not one of your courses here yet. Right now Beyond.Ed covers
+                    maths, English, science, and social science.
                   </p>
                 ) : mine.length === 0 ? (
                   <p className="mt-1 text-xs text-ink-muted">No course placed.</p>
@@ -135,7 +134,7 @@ export default async function ProgressPage() {
                         {c.course.title}
                       </Link>
                       <span className="block text-xs">
-                        {c.daysCompleted} of {c.daysTotal} pathway days
+                        {c.daysCompleted} of {c.daysTotal} class days
                       </span>
                     </p>
                   ))
@@ -149,7 +148,7 @@ export default async function ProgressPage() {
       <section aria-labelledby="pathway" className="mt-10">
         <SectionHeading
           id="pathway"
-          hint="Every unit of every course, with the month the local calendar maps it to."
+          hint="Every unit in every course, and roughly when you will work on it."
         >
           Course progress map
         </SectionHeading>
@@ -161,7 +160,7 @@ export default async function ProgressPage() {
               <Card key={progress.enrollment.id}>
                 <CardHeader
                   title={progress.course.title}
-                  hint={`${done} of ${units.length} units complete · ${progress.daysCompleted} of ${progress.daysTotal} pathway days`}
+                  hint={`${done} of ${units.length} units complete · ${progress.daysCompleted} of ${progress.daysTotal} class days`}
                   action={
                     progress.current ? (
                       <Link
@@ -193,9 +192,9 @@ export default async function ProgressPage() {
       <section aria-labelledby="skills" className="mt-10">
         <SectionHeading
           id="skills"
-          hint={`Readiness and confidence are stored and shown separately. Rule ${RULE_VERSIONS.mastery}.`}
+          hint="How ready each one feels, and how sure we are about that."
         >
-          Skills
+          What you are learning
         </SectionHeading>
         {profile.length === 0 ? (
           <Empty>No recorded work yet.</Empty>
@@ -205,7 +204,7 @@ export default async function ProgressPage() {
               <table className="w-full min-w-[46rem] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-line text-left">
-                    <th scope="col" className="px-5 py-3 font-semibold text-ink">Skill</th>
+                    <th scope="col" className="px-5 py-3 font-semibold text-ink">What you are learning</th>
                     <th scope="col" className="px-5 py-3 font-semibold text-ink">Readiness</th>
                     <th scope="col" className="px-5 py-3 font-semibold text-ink">How sure we are</th>
                     <th scope="col" className="px-5 py-3 font-semibold text-ink">Based on</th>
@@ -216,8 +215,13 @@ export default async function ProgressPage() {
                     const insufficient = m.confidence === "insufficient";
                     return (
                       <tr key={m.skill}>
-                        <th scope="row" className="px-5 py-3 text-left font-mono text-xs font-medium text-ink">
-                          {m.skill}
+                        <th scope="row" className="px-5 py-3 text-left">
+                          <span className="text-sm font-semibold text-ink">
+                            {skillLabel(m.skill)}
+                          </span>
+                          <span className="mt-0.5 block text-xs font-normal text-ink-muted">
+                            {focusForSkill(m.skill)?.courseTitle}
+                          </span>
                         </th>
                         <td className="px-5 py-3">
                           {insufficient ? (
@@ -278,24 +282,19 @@ export default async function ProgressPage() {
               const presentation = INTERVENTION_STATUS_PRESENTATION[plan.status];
               return (
                 <Card as="li" key={plan.id} className="p-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusChip label={presentation.label} tone={presentation.tone} />
-                    <span className="font-mono text-xs text-ink-muted">
-                      {plan.interventionLessonId}
-                    </span>
-                  </div>
+                  <StatusChip label={presentation.label} tone={presentation.tone} />
                   <p className="mt-2 text-sm font-semibold text-ink">
-                    {plan.targetStandard ?? plan.targetSkill}
+                    {skillLabel(plan.targetSkill)}
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">{presentation.studentMeaning}</p>
                   <p className="mt-2 text-xs text-ink-muted">
-                    Return rule {plan.readinessMinPercent}% readiness +{" "}
-                    {plan.transferItemsRequired} transfer item
+                    Needed {plan.readinessMinPercent}% on a short check plus{" "}
+                    {plan.transferItemsRequired} follow-up question
                     {plan.readinessPercent !== null
                       ? ` · you scored ${plan.readinessPercent}%`
                       : ""}
                     {plan.transferPassed !== null
-                      ? ` · transfer ${plan.transferPassed ? "passed" : "not passed"}`
+                      ? ` · the follow-up ${plan.transferPassed ? "went through" : "did not go through"}`
                       : ""}
                   </p>
                 </Card>
@@ -308,7 +307,7 @@ export default async function ProgressPage() {
       <section aria-labelledby="evidence" className="mt-10">
         <SectionHeading
           id="evidence"
-          hint="Your most recent responses. Nothing here is ever edited or deleted — corrections are added as new rows."
+          hint="Your most recent work. Nothing here is ever changed or removed — if something needs correcting, the correction is added alongside it."
         >
           Evidence
         </SectionHeading>
@@ -320,7 +319,6 @@ export default async function ProgressPage() {
                 <tr className="border-b border-line text-left">
                   <th scope="col" className="px-5 py-3 font-semibold text-ink">When</th>
                   <th scope="col" className="px-5 py-3 font-semibold text-ink">Lesson</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Skill</th>
                   <th scope="col" className="px-5 py-3 font-semibold text-ink">Kind</th>
                   <th scope="col" className="px-5 py-3 font-semibold text-ink">Result</th>
                 </tr>
@@ -331,11 +329,8 @@ export default async function ProgressPage() {
                     <td className="whitespace-nowrap px-5 py-2.5 text-xs text-ink-muted">
                       {formatDateTime(row.recordedAt)}
                     </td>
-                    <td className="whitespace-nowrap px-5 py-2.5 font-mono text-xs text-ink">
-                      {row.lessonCode}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-2.5 font-mono text-xs text-ink">
-                      {row.skill}
+                    <td className="px-5 py-2.5 text-xs text-ink">
+                      {lessonLabel(row.lessonCode)}
                     </td>
                     <td className="whitespace-nowrap px-5 py-2.5 text-xs text-ink-muted">
                       {row.source.replace(/_/g, " ")}

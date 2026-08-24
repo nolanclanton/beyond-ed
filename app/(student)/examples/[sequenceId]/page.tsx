@@ -7,7 +7,6 @@ import {
   Card,
   CardHeader,
   FactList,
-  StatusChip,
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 import {
@@ -15,7 +14,7 @@ import {
   sequenceById,
   sequenceMinutes,
 } from "@/lib/db/demo-sequences";
-import { standardCode, standardTag, STANDARD_TAG_MEANING } from "@/lib/curriculum/catalog";
+import { lessonLabel } from "@/lib/views/learning-focus";
 
 export default async function SequencePage({
   params,
@@ -107,27 +106,10 @@ export default async function SequencePage({
                     </div>
                     <p className="mt-1 text-sm font-medium text-ink">{phase.objective}</p>
                     <p className="mt-1.5 text-sm text-ink-muted">{phase.brief}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {phase.standards.map((s) => {
-                        const tag = standardTag(s);
-                        return (
-                          <StatusChip
-                            key={s}
-                            label={standardCode(s)}
-                            tone="neutral"
-                            title={
-                              tag
-                                ? (STANDARD_TAG_MEANING[tag] ?? tag)
-                                : "Primary standard from the alignment matrix"
-                            }
-                          />
-                        );
-                      })}
-                      <span className="text-xs text-ink-muted">
-                        draws on{" "}
-                        <span className="font-mono">{phase.linkedLessonCode}</span>
-                      </span>
-                    </div>
+                    <p className="mt-2 text-xs text-ink-muted">
+                      Builds on{" "}
+                      {lessonLabel(phase.linkedLessonCode)}
+                    </p>
                   </li>
                 );
               })}
@@ -137,10 +119,9 @@ export default async function SequencePage({
       </div>
 
       <p className="mt-8 text-xs text-ink-muted">
-        The standard codes above are real, taken from the Integrated Math 1
-        alignment matrix in the curriculum catalog. The storyline and the phase
-        text are demonstration content and have not been reviewed or adopted by a
-        curriculum author.
+        Each phase connects back to a real lesson in the course. The storyline
+        and the phase text are demonstration content and have not been reviewed
+        or adopted by a curriculum author.
       </p>
     </div>
   );

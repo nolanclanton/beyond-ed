@@ -13,7 +13,7 @@ import {
   type CatalogUnit,
 } from "@/lib/curriculum/catalog";
 import { monthForUnitStart } from "@/lib/calendar/periods";
-import { db } from "@/lib/db/store";
+import { lessonStatesFor } from "@/lib/db/store";
 import type { Enrollment } from "@/lib/db/types";
 
 export type UnitProgress = {
@@ -29,14 +29,11 @@ export type UnitProgress = {
 };
 
 export function unitProgress(enrollment: Enrollment): UnitProgress[] {
-  const d = db();
   const course = getCourse(enrollment.courseTitle);
   if (!course) return [];
 
   const states = new Map(
-    d.lessonStates
-      .filter((s) => s.enrollmentId === enrollment.id)
-      .map((s) => [s.lessonCode, s.status]),
+    lessonStatesFor(enrollment.id).map((s) => [s.lessonCode, s.status]),
   );
 
   let daysBefore = 0;
@@ -99,8 +96,8 @@ export function lessonPositionInUnit(
 /** Total pathway days finished across a course. */
 export function pathwayDaysComplete(enrollment: Enrollment, course: CatalogCourse): number {
   const done = new Set(
-    db()
-      .lessonStates.filter((s) => s.enrollmentId === enrollment.id && s.status === "completed")
+    lessonStatesFor(enrollment.id)
+      .filter((s) => s.status === "completed")
       .map((s) => s.lessonCode),
   );
   return courseLessons(course)

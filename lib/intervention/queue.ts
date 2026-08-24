@@ -15,7 +15,7 @@ import {
   primaryStandards,
   standardCode,
 } from "@/lib/curriculum/catalog";
-import { db } from "@/lib/db/store";
+import { db, lessonStatesFor } from "@/lib/db/store";
 import type { Enrollment, User } from "@/lib/db/types";
 import { currentEvidence } from "@/lib/evidence/ledger";
 import { skillProfile } from "@/lib/mastery/profile";
@@ -34,7 +34,7 @@ import { bestSupportFor, TYPICAL_MINUTES } from "./library";
 const LOOKAHEAD_LESSONS = 5;
 
 export function currentLessonFor(enrollment: Enrollment): string | null {
-  const states = db().lessonStates.filter((s) => s.enrollmentId === enrollment.id);
+  const states = lessonStatesFor(enrollment.id);
   const course = getCourse(enrollment.courseTitle);
   if (!course) return null;
   const order = courseLessons(course).map((l) => l.code);

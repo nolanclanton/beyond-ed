@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { subjectForLesson } from "@/lib/curriculum/catalog";
 import { ALL_ITEMS, itemById } from "@/lib/db/demo-items";
 import { ensureSeeded } from "@/lib/db/seed";
-import { clearDatabase, db } from "@/lib/db/store";
+import { clearDatabase, db, lessonStatesFor } from "@/lib/db/store";
 import { spiralReviewFor } from "@/lib/learning/lesson";
 import { SPIRAL_REVIEW_MAX_ITEMS } from "@/lib/rules/versions";
 
@@ -19,19 +19,37 @@ beforeEach(() => {
   ensureSeeded();
 });
 
-/** Every lesson a seeded student currently has open. */
+/**
+ * One open lesson per course, plus every lesson the named demo students have
+ * open.
+ *
+ * Cross-subject leakage is a property of the COURSE, not of the individual
+ * student — the candidate pool is built from the course's subject and the
+ * student's own evidence, and a leak would show on any student in that course.
+ * Sweeping all 2,336 active enrollments would call `skillProfile` 2,336 times
+ * for no extra coverage.
+ */
+const NAMED = ["u_amara", "u_priya", "u_jamal", "u_diego", "u_marcus", "u_sofia"];
+
 function openLessons() {
   const d = db();
-  return d.enrollments
-    .filter((e) => e.status === "active")
-    .flatMap((enrollment) => {
-      const state = d.lessonStates.find(
-        (s) =>
-          s.enrollmentId === enrollment.id &&
-          (s.status === "available" || s.status === "in_progress"),
-      );
-      return state ? [{ enrollment, lessonCode: state.lessonCode }] : [];
-    });
+  const seenCourses = new Set<string>();
+  const out: { enrollment: (typeof d.enrollments)[number]; lessonCode: string }[] = [];
+
+  for (const enrollment of d.enrollments) {
+    if (enrollment.status !== "active") continue;
+    const named = NAMED.includes(enrollment.studentId);
+    if (!named && seenCourses.has(enrollment.courseTitle)) continue;
+
+    const state = lessonStatesFor(enrollment.id).find(
+      (s) => s.status === "available" || s.status === "in_progress",
+    );
+    if (!state) continue;
+
+    seenCourses.add(enrollment.courseTitle);
+    out.push({ enrollment, lessonCode: state.lessonCode });
+  }
+  return out;
 }
 
 describe("Spiral Review subject scoping", () => {
@@ -50,8 +68,11 @@ describe("Spiral Review subject scoping", () => {
         checked += 1;
       }
     }
-    // Guard against the assertion passing because nothing was selected.
+    // Guard against the assertion passing because nothing was selected, and
+    // against the sweep quietly narrowing to a handful of courses.
     expect(checked).toBeGreaterThan(50);
+    expect(new Set(openLessons().map((l) => l.enrollment.courseTitle)).size)
+      .toBeGreaterThanOrEqual(20);
   });
 
   it("never draws from the lesson being taught", () => {
