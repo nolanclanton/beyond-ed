@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
 import { canAuthorCurriculum } from "@/lib/auth/scope";
@@ -17,6 +18,7 @@ import {
   SectionHeading,
   StatusChip,
 } from "@/lib/design/primitives";
+import { FOCUS_RING } from "@/lib/design/tokens";
 import { CAPACITY_CONTRACT, RULE_VERSIONS } from "@/lib/rules/versions";
 
 import { CurriculumMoveForm } from "./curriculum-forms";
@@ -75,6 +77,20 @@ export default async function CurriculumGovernancePage() {
             below — the information is still fully readable.
           </Banner>
         )}
+      </div>
+
+      <div className="mt-4">
+        <Banner title="Lesson content is written in the studio." tone="neutral">
+          Scripts, video, and quiz items are built in the{" "}
+          <Link
+            href="/org/curriculum/build"
+            className={`font-semibold text-primary underline underline-offset-4 ${FOCUS_RING}`}
+          >
+            lesson studio
+          </Link>
+          , against a draft version. This page is where a version moves through
+          review, approval, and publication.
+        </Banner>
       </div>
 
       <div className="mt-4">

@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
-import { readinessItemsFor, transferItemFor } from "@/lib/db/demo-items";
+import {
+  readinessItemsForStandard,
+  transferItemForStandard,
+} from "@/lib/curriculum/lesson-bank";
 import { lessonContent } from "@/lib/db/demo-lesson-content";
 import { db } from "@/lib/db/store";
 import {
@@ -47,8 +50,12 @@ export default async function SupportPage({
   const entry = entryById(plan.interventionLessonId);
   const triggers = evidenceByIds(plan.triggerEvidenceIds);
   const standard = plan.targetStandard ?? plan.targetSkill;
-  const readiness = readinessItemsFor(standard);
-  const transfer = transferItemFor(standard);
+  // Items resolve against the enrollment's own course version, so a support
+  // plan runs on the curriculum that class is actually taking.
+  const planEnrollment = d.enrollments.find((e) => e.id === plan.enrollmentId);
+  const versionId = planEnrollment?.courseVersionId ?? null;
+  const readiness = readinessItemsForStandard(standard, versionId);
+  const transfer = transferItemForStandard(standard, versionId);
   // The model and practice come from the lesson that teaches this standard.
   const teaching = entry ? lessonContent(entry.linkedLessonCode) : undefined;
 

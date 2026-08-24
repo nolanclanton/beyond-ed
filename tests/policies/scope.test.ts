@@ -14,6 +14,17 @@ import {
   visibleStudentIds,
 } from "@/lib/auth/scope";
 import { readableAudit } from "@/lib/audit/log";
+import {
+  approveVersion,
+  publishVersion,
+  submitForReview,
+} from "@/lib/curriculum/authoring";
+import {
+  authoredLesson,
+  authoringGate,
+  saveLessonScript,
+} from "@/lib/curriculum/lesson-authoring";
+import { resolveLessonContent } from "@/lib/curriculum/lesson-bank";
 import { ensureSeeded } from "@/lib/db/seed";
 import { clearDatabase, db } from "@/lib/db/store";
 import type { User } from "@/lib/db/types";
@@ -255,5 +266,68 @@ describe("default deny", () => {
     for (const actor of db().users) {
       expect(scopeLabel(actor)).toMatch(/^(site|org):/);
     }
+  });
+});
+
+/**
+ * Authored lesson content — the contract `supabase/policies/authored_lessons.sql`
+ * must satisfy (migration 0006).
+ *
+ * Two grants, each with its negative: the curriculum-author authorization, and
+ * the draft-only rule that keeps a published lesson from changing under a
+ * running class. In the database these are one policy plus a trigger; here the
+ * enforcement point is `authoringGate` / `saveLessonScript`, which every write
+ * goes through.
+ */
+describe("authored lesson content: author authorization and the draft rule", () => {
+  const DRAFT = "cv_Mathematics_6_2026_2";
+  const PUBLISHED = "cv_Mathematics_6_2026_1";
+  const LESSON = "M6-U1-L2";
+
+  const script = (versionId: string) => ({
+    versionId,
+    lessonCode: LESSON,
+    relevance: "",
+    goal: "Find and use a unit rate.",
+    successCriteria: [],
+    instruction: [],
+    vocabulary: [],
+    workedModel: [],
+    guidedPractice: [],
+    independentTask: "",
+    notesOutline: [],
+    reason: "Policy test.",
+  });
+
+  it("POSITIVE: a curriculum author writes content into a draft version", () => {
+    const written = saveLessonScript(user("u_haddad"), script(DRAFT), "pol-1");
+    expect(written.goal).toBe("Find and use a unit rate.");
+    expect(authoringGate(user("u_haddad"), DRAFT).editable).toBe(true);
+  });
+
+  it("NEGATIVE: an administrator without the authorization writes nothing", () => {
+    expect(canAuthorCurriculum(user("u_okonjo"))).toBe(false);
+    expect(() => saveLessonScript(user("u_okonjo"), script(DRAFT), "pol-2")).toThrow();
+    expect(authoredLesson(DRAFT, LESSON)).toBeUndefined();
+    expect(authoringGate(user("u_okonjo"), DRAFT).editable).toBe(false);
+  });
+
+  it("NEGATIVE: not even an author writes into a published version", () => {
+    expect(() => saveLessonScript(user("u_haddad"), script(PUBLISHED), "pol-3")).toThrow(
+      /draft/,
+    );
+    expect(authoredLesson(PUBLISHED, LESSON)).toBeUndefined();
+    expect(authoringGate(user("u_haddad"), PUBLISHED).editable).toBe(false);
+  });
+
+  it("POSITIVE: everyone in the organization can read published content", () => {
+    saveLessonScript(user("u_haddad"), script(DRAFT), "pol-4");
+    submitForReview(user("u_haddad"), DRAFT, "Ready.", "pol-5");
+    approveVersion(user("u_haddad"), DRAFT, "Approved.", "pol-6");
+    publishVersion(user("u_haddad"), DRAFT, "Published.", "pol-7");
+
+    // Reading is not gated on the authorization: a student needs the lesson
+    // their section's version publishes.
+    expect(resolveLessonContent(DRAFT, LESSON).source).toBe("authored");
   });
 });

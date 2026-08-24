@@ -221,6 +221,112 @@ export type Intervention = {
   updatedAt: string;
 };
 
+/**
+ * ---------------------------------------------------------------------------
+ * Authored lesson content (CLAUDE.md §7).
+ * ---------------------------------------------------------------------------
+ *
+ * What a curriculum author BUILDS: the script a student reads, the video that
+ * carries it, and the quiz that produces evidence. It hangs off a course
+ * VERSION, which is what makes the versioning rules hold without a second
+ * lifecycle:
+ *
+ *   - Content is editable only while its version is a draft.
+ *   - A roster section keeps the version it was created with, so publishing
+ *     authored content cannot change what a running section is teaching, and
+ *     cannot alter prior evidence.
+ *   - `lessonCode` is a stable identifier from the catalog. Authoring attaches
+ *     content to a lesson the course plan already reserves days for, so it can
+ *     never break the 135 + 40 = 175 contract.
+ */
+
+/** What a quiz item is for. The four purposes the engine knows how to score. */
+export type ItemPurpose =
+  | "exit_ticket"
+  | "readiness_check"
+  | "transfer_check"
+  | "spiral_review";
+
+export type LessonVideo = {
+  id: string;
+  title: string;
+  /**
+   * Where the file lives. `url` is the only source in this build: binary
+   * upload needs Supabase Storage, which is not provisioned yet (ADR 0002,
+   * ADR 0010). The field exists so the storage-backed source can be added
+   * without changing every reader.
+   */
+  source: "url";
+  url: string;
+  minutes: number | null;
+  /**
+   * Required. A video without a transcript is not accessible, and an
+   * inaccessible lesson is not a finished lesson (CLAUDE.md §12).
+   */
+  transcript: string;
+  /** Optional WebVTT track. A transcript is required either way. */
+  captionsUrl: string | null;
+  addedAt: string;
+  addedByUserId: string;
+};
+
+export type AuthoredChoice = {
+  id: string;
+  text: string;
+  /**
+   * The error family this distractor reveals, from the subject's own error
+   * model. Null on the correct choice. This is what turns a wrong answer into
+   * a diagnosis rather than a mark.
+   */
+  errorCode: string | null;
+};
+
+export type AuthoredQuizItem = {
+  id: string;
+  purpose: ItemPurpose;
+  /** Must be a standard the lesson claims as primary coverage. */
+  standard: string;
+  skill: string;
+  stem: string;
+  choices: AuthoredChoice[];
+  correctChoiceId: string;
+  /** Shown after completion — explanations appear after, never during. */
+  rationale: string;
+  addedAt: string;
+  addedByUserId: string;
+};
+
+export type AuthoredLesson = {
+  id: string;
+  courseVersionId: string;
+  /** Stable catalog identifier, e.g. `M6-U1-L2`. Never regenerated on edit. */
+  lessonCode: string;
+
+  /** Stage 3 — why this lesson exists for the person reading it. */
+  relevance: string;
+  /** Stage 4 — the goal and how a student knows they met it. */
+  goal: string;
+  successCriteria: string[];
+  /** Stage 5 — the script: accessible instruction, in order. */
+  instruction: string[];
+  vocabulary: { term: string; meaning: string }[];
+  /** Stage 6 — the worked model, exposing reasoning rather than the answer. */
+  workedModel: { step: string; reasoning: string }[];
+  /** Stage 7 — guided practice with fading support. */
+  guidedPractice: { prompt: string; hint: string; answer: string }[];
+  /** Stage 8 — independent application. */
+  independentTask: string;
+  /** Stage 1 — the notes record the student keeps. */
+  notesOutline: string[];
+
+  videos: LessonVideo[];
+  items: AuthoredQuizItem[];
+
+  createdAt: string;
+  updatedAt: string;
+  updatedByUserId: string;
+};
+
 export type TeacherMessage = {
   id: string;
   fromUserId: string;

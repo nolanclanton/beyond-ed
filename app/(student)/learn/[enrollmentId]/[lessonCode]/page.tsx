@@ -8,8 +8,12 @@ import {
   getCourse,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STAGES, LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
-import { itemsFor } from "@/lib/db/demo-items";
-import { lessonContent } from "@/lib/db/demo-lesson-content";
+import type { LessonContent } from "@/lib/db/demo-lesson-content";
+import type { LessonVideo } from "@/lib/db/types";
+import {
+  itemsForLesson,
+  resolveLessonContent,
+} from "@/lib/curriculum/lesson-bank";
 import { db } from "@/lib/db/store";
 import {
   Banner,
@@ -26,7 +30,7 @@ import { EXIT_BANDS } from "@/lib/rules/versions";
 import { locationFor } from "@/lib/views/student";
 import { focusForLesson, lessonLabel, skillLabel } from "@/lib/views/learning-focus";
 import { recommendationsForEnrollment } from "@/lib/intervention/queue";
-import { itemById } from "@/lib/db/demo-items";
+import { bankItemById as itemById } from "@/lib/curriculum/lesson-bank";
 
 import {
   CompleteLessonForm,
@@ -72,9 +76,17 @@ export default async function LessonPage({
   );
   const status = state?.status ?? "locked";
   const presentation = LESSON_STATUS_PRESENTATION[status];
-  const content = lessonContent(lessonCode);
+  // Content and items resolve against the version this enrollment is pinned
+  // to: authored curriculum if this version published any, the demonstration
+  // lesson if not, and neither where a lesson has not been written yet.
+  const resolved = resolveLessonContent(enrollment.courseVersionId, lessonCode);
+  const content = resolved.content;
   const focus = focusForLesson(lessonCode);
-  const exitItems = itemsFor(lessonCode, "exit_ticket");
+  const exitItems = itemsForLesson(
+    lessonCode,
+    "exit_ticket",
+    enrollment.courseVersionId,
+  );
 
   const stage = Math.min(10, Math.max(1, Number(stageParam ?? state?.stage ?? 1) || 1));
   const started = status === "in_progress" || status === "submitted";
@@ -173,12 +185,19 @@ export default async function LessonPage({
         </Card>
       </div>
 
-      {!content ? (
+      {resolved.source === "none" ? (
         <div className="mt-5">
           <Banner title="This lesson has not been written yet." tone="notice">
             Where it sits in the course is real. The teaching, the worked
             example, and the practice questions do not exist yet, so there is
             nothing here to work through and nothing to turn in.
+          </Banner>
+        </div>
+      ) : resolved.source === "authored" ? (
+        <div className="mt-5">
+          <Banner title={`From ${resolved.versionLabel ?? "your course version"}.`} tone="neutral">
+            This lesson was written for the version of the course you are
+            enrolled in. A later version cannot change it underneath you.
           </Banner>
         </div>
       ) : (
@@ -223,6 +242,7 @@ export default async function LessonPage({
               enrollmentId={enrollmentId}
               lessonCode={lessonCode}
               content={content}
+              videos={resolved.videos}
               spiralItems={spiralItems}
               spiralExplanation={spiral?.explanation ?? []}
               exitItems={exitItems.map((i) => ({
@@ -316,7 +336,8 @@ type StageBodyProps = {
   stage: number;
   enrollmentId: string;
   lessonCode: string;
-  content: ReturnType<typeof lessonContent>;
+  content: LessonContent | null;
+  videos: LessonVideo[];
   spiralItems: {
     id: string;
     stem: string;
@@ -343,7 +364,7 @@ type StageBodyProps = {
 };
 
 function StageBody(props: StageBodyProps) {
-  const { stage, content } = props;
+  const { stage, content, videos } = props;
   const title = LESSON_STAGES[stage - 1];
 
   const notAuthored = (
@@ -479,7 +500,14 @@ function StageBody(props: StageBodyProps) {
     case 5:
       return (
         <Card>
-          <CardHeader title={`5. ${title}`} hint="Readable text first. Media alternatives, captions, and transcripts are not built yet." />
+          <CardHeader
+            title={`5. ${title}`}
+            hint={
+              videos.length > 0
+                ? "Readable text first, with the video and its transcript below."
+                : "Readable text first. This lesson has no video."
+            }
+          />
           <div className="p-5">
             {content ? (
               <>
@@ -488,6 +516,52 @@ function StageBody(props: StageBodyProps) {
                     <p key={p}>{p}</p>
                   ))}
                 </div>
+
+                {videos.length > 0 ? (
+                  <div className="mt-6 flex flex-col gap-4">
+                    {videos.map((video) => (
+                      <div key={video.id} className="rounded-lg border border-line p-4">
+                        <p className="text-sm font-semibold text-ink">{video.title}</p>
+                        <p className="mt-0.5 text-xs text-ink-muted">
+                          {video.minutes ? `${video.minutes} minutes · ` : ""}
+                          transcript below
+                          {video.captionsUrl ? " · captions available" : ""}
+                        </p>
+                        {/*
+                          A plain video element with its captions track. No
+                          autoplay, no third-party player, and the transcript is
+                          on the page whether or not the video plays.
+                        */}
+                        <video
+                          controls
+                          preload="none"
+                          className="mt-3 w-full max-w-2xl rounded-lg border border-line"
+                        >
+                          <source src={video.url} />
+                          {video.captionsUrl ? (
+                            <track
+                              kind="captions"
+                              src={video.captionsUrl}
+                              srcLang="en"
+                              label="English"
+                              default
+                            />
+                          ) : null}
+                        </video>
+                        <details className="mt-3">
+                          <summary
+                            className={`cursor-pointer text-sm font-semibold text-primary ${FOCUS_RING}`}
+                          >
+                            Read the transcript
+                          </summary>
+                          <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm text-ink-muted">
+                            {video.transcript}
+                          </p>
+                        </details>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-ink-muted">
                   Vocabulary
                 </h3>

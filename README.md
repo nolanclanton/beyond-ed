@@ -67,9 +67,14 @@ verify transfer, and return the student to the exact pathway location*:
    measures.
 5. **Camille Okonjo (organization administrator).** The audit log carries every
    action you just took, with actor, role, scope, before, after, and reason.
-6. **Yusra Haddad (curriculum author).** The Mathematics 6 `2026.2` draft can be
-   moved through review, approval, and publication — and publication is gated on
-   135 + 40 = 175.
+6. **Yusra Haddad (curriculum author).** The lesson studio builds a lesson on the
+   Mathematics 6 `2026.2` draft: write the script stage by stage, attach a video
+   with its transcript, and write Exit Ticket items where every wrong choice
+   names the error it reveals. The same draft then moves through review,
+   approval, and publication in curriculum governance — and publication is gated
+   on 135 + 40 = 175. Content is editable only while the version is a draft, so a
+   class running on `2026.1` cannot have its lesson change underneath it
+   ([ADR 0010](docs/decisions/0010-lesson-studio.md)).
 7. **Victor Salinas (site administrator).** Northfield Central's portal: 126
    students, 8 teachers, 504 enrollments, teacher loads, and the unresolved
    queue a site leader can act on with a recorded reason.
@@ -122,6 +127,8 @@ finished page with nothing hidden
 | Layer | Where |
 |---|---|
 | Curriculum catalog | `lib/curriculum/` — generated from the blueprint, 30 courses, 249 units, 741 lessons |
+| Lesson authoring | `lib/curriculum/lesson-authoring.ts` — script, video, and quiz items written against a draft course version |
+| Lesson resolution | `lib/curriculum/lesson-bank.ts` — authored content for the enrollment's own version, else the demo lesson, else "not written yet" |
 | School-year calendar | `lib/calendar/` — the ten planning cycles mapped to September–June |
 | Completion and performance | `lib/views/metrics.ts` — two distinct measures, never combined, never mixed with readiness |
 | Teacher caseload | `lib/views/caseload.ts` — position, performance, and active minutes as separate written bands |
@@ -167,10 +174,16 @@ Stated plainly, because the interface states them too:
   the flows; browser-level coverage is the next testing step.
 - **Assessment items and instruction are demo content** on six lessons and
   absent elsewhere ([ADR 0005](docs/decisions/0005-demo-content-is-labelled.md)).
+  Anything authored in the lesson studio replaces the demo content for the
+  version it was written into.
+- **Video is stored as an address, not a file.** The lesson studio takes the
+  https address of a video plus a required transcript; uploading the file itself
+  needs Supabase Storage, which is not provisioned
+  ([ADR 0010](docs/decisions/0010-lesson-studio.md)).
 - **Not built, and not implied to be:** file upload and downloadable workbooks,
-  media with captions and transcripts, role-change controls, configurable return
-  rules, producing an actual export file, section reassignment, SIS/LMS/SSO
-  integration, a family portal, and native applications.
+  role-change controls, configurable return rules, producing an actual export
+  file, section reassignment, SIS/LMS/SSO integration, a family portal, and
+  native applications.
 - **Foreign language and physical education** appear on the student's subject
   list marked as not in the catalog. Adding them means authoring curriculum,
   which is a curriculum owner's decision.

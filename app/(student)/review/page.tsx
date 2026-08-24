@@ -11,7 +11,8 @@ import {
   SectionHeading,
   StatusChip,
 } from "@/lib/design/primitives";
-import { supportIsRunnable } from "@/lib/db/demo-items";
+import { supportIsRunnableFor } from "@/lib/curriculum/lesson-bank";
+import { db } from "@/lib/db/store";
 import { interventionsForStudent } from "@/lib/intervention/lifecycle";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { entryById } from "@/lib/intervention/library";
@@ -32,6 +33,7 @@ export const metadata: Metadata = {
  */
 export default async function ReviewPage() {
   const student = await requireUser();
+  const d = db();
   const plans = interventionsForStudent(student.id);
   const open = plans.filter(
     (p) => p.status !== "closed" && p.status !== "returned_to_pathway",
@@ -64,8 +66,14 @@ export default async function ReviewPage() {
               const presentation = INTERVENTION_STATUS_PRESENTATION[plan.status];
               const entry = entryById(plan.interventionLessonId);
               const triggers = evidenceByIds(plan.triggerEvidenceIds);
+              const planEnrollment = d.enrollments.find(
+                (e) => e.id === plan.enrollmentId,
+              );
               const runnable = plan.targetStandard
-                ? supportIsRunnable(plan.targetStandard)
+                ? supportIsRunnableFor(
+                    plan.targetStandard,
+                    planEnrollment?.courseVersionId ?? null,
+                  )
                 : false;
               return (
                 <Card as="li" key={plan.id}>

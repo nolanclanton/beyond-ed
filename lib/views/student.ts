@@ -19,7 +19,7 @@ import {
 } from "@/lib/curriculum/catalog";
 import { LESSON_STATUS_PRESENTATION, type LessonStatus } from "@/lib/curriculum/lesson-status";
 import { db, lessonStatesFor } from "@/lib/db/store";
-import { hasExitTicket } from "@/lib/db/demo-items";
+import { hasExitTicketFor } from "@/lib/curriculum/lesson-bank";
 import type { Enrollment, Intervention, TeacherMessage, User } from "@/lib/db/types";
 import { currentEvidence } from "@/lib/evidence/ledger";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
@@ -82,7 +82,7 @@ export function locationFor(
     standards: primaryStandards(found.lesson),
     interventionLessonId: interventionId(found.lesson),
     interventionTarget: interventionTarget(found.lesson),
-    hasItems: hasExitTicket(found.lesson.code),
+    hasItems: hasExitTicketFor(found.lesson.code, enrollment.courseVersionId),
     href: `/learn/${enrollment.id}/${found.lesson.code}`,
   };
 }

@@ -26,6 +26,11 @@ alter table public.export_records    enable row level security;
 alter table public.audit_events      enable row level security;
 alter table public.idempotency_keys  enable row level security;
 
+-- Added in migration 0006 — authored lesson content.
+alter table public.authored_lessons  enable row level security;
+alter table public.lesson_videos     enable row level security;
+alter table public.lesson_items      enable row level security;
+
 -- Views inherit the policies of their base tables when created with
 -- security_invoker, which is what makes `evidence_current` safe to read.
 alter view public.evidence_current       set (security_invoker = on);

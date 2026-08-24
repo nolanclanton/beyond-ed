@@ -20,6 +20,7 @@
  */
 import type {
   AuditEvent,
+  AuthoredLesson,
   CourseVersion,
   Enrollment,
   EvidenceRecord,
@@ -41,6 +42,8 @@ export type Database = {
   sites: Site[];
   users: User[];
   courseVersions: CourseVersion[];
+  /** Lesson content authored against a course version (CLAUDE.md §7). */
+  authoredLessons: AuthoredLesson[];
   sections: RosterSection[];
   enrollments: Enrollment[];
   lessonStates: LessonState[];
@@ -80,6 +83,7 @@ function emptyDatabase(): Database {
     sites: [],
     users: [],
     courseVersions: [],
+    authoredLessons: [],
     sections: [],
     enrollments: [],
     lessonStates: [],
@@ -110,7 +114,13 @@ const g = globalThis as GlobalWithDb;
 if (!g[GLOBAL_KEY]) g[GLOBAL_KEY] = emptyDatabase();
 
 export function db(): Database {
-  return g[GLOBAL_KEY] as Database;
+  const store = g[GLOBAL_KEY] as Database;
+  // The store deliberately outlives module reloading, which means a store
+  // created before a collection existed can still be in memory during
+  // development. Backfill the empty collection rather than crash on a missing
+  // array; a fresh process gets it from `emptyDatabase` either way.
+  if (!store.authoredLessons) store.authoredLessons = [];
+  return store;
 }
 
 /** Wipes and re-marks the store as unseeded. Used by the seeder and by tests. */
@@ -193,6 +203,20 @@ export function transact<T>(fn: () => T): T {
     sites: [...d.sites],
     users: [...d.users],
     courseVersions: d.courseVersions.map((r) => ({ ...r })),
+    // Authored lesson content is the one record with nested arrays that are
+    // mutated in place, so a shallow row copy would let a rolled-back write
+    // survive inside `videos` or `items`. Copy the whole shape.
+    authoredLessons: d.authoredLessons.map((r) => ({
+      ...r,
+      successCriteria: [...r.successCriteria],
+      instruction: [...r.instruction],
+      vocabulary: r.vocabulary.map((v) => ({ ...v })),
+      workedModel: r.workedModel.map((w) => ({ ...w })),
+      guidedPractice: r.guidedPractice.map((g) => ({ ...g })),
+      notesOutline: [...r.notesOutline],
+      videos: r.videos.map((v) => ({ ...v })),
+      items: r.items.map((i) => ({ ...i, choices: i.choices.map((c) => ({ ...c })) })),
+    })),
     sections: d.sections.map((r) => ({ ...r })),
     enrollments: d.enrollments.map((r) => ({ ...r })),
     lessonStates: d.lessonStates.map((r) => ({ ...r })),

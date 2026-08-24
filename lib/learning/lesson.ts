@@ -26,7 +26,12 @@ import {
   transact,
   withIdempotency,
 } from "@/lib/db/store";
-import { ALL_ITEMS, itemById, itemsFor } from "@/lib/db/demo-items";
+import { ALL_ITEMS } from "@/lib/db/demo-items";
+import {
+  bankItemById,
+  itemsForLesson,
+  spiralCandidatePool,
+} from "@/lib/curriculum/lesson-bank";
 import type { EvidenceRecord, LessonState, User } from "@/lib/db/types";
 import { recordEvidence } from "@/lib/evidence/ledger";
 import { bandFor, RULE_VERSIONS, type ExitBand } from "@/lib/rules/versions";
@@ -157,7 +162,11 @@ export function spiralReviewFor(
     currentEvidence({ studentId }).map((e) => e.skill),
   );
 
-  const candidates = ALL_ITEMS.filter((item) => {
+  // The pool is the demo bank plus whatever this enrollment's own course
+  // version has published, so a Spiral Review can retrieve authored work.
+  const pool = spiralCandidatePool(enrollment.courseVersionId, ALL_ITEMS);
+
+  const candidates = pool.filter((item) => {
     if (item.lessonCode === lessonCode) return false;
     if (subjectForLesson(item.lessonCode) !== subject) return false;
     return seenSkills.has(item.skill) || upcomingSet.has(item.skill);
@@ -256,7 +265,11 @@ export function submitExitTicket(
         const found = findLesson(course, lessonCode);
         if (!found) throw new LessonError("That lesson is not in this course.");
 
-        const bank = itemsFor(lessonCode, "exit_ticket");
+        const bank = itemsForLesson(
+          lessonCode,
+          "exit_ticket",
+          enrollment.courseVersionId,
+        );
         if (bank.length === 0) {
           throw new LessonError(
             "Exit Ticket items for this lesson have not been authored, so it cannot be scored.",
@@ -468,4 +481,8 @@ export function completeLesson(
   );
 }
 
-export { itemById };
+/**
+ * Item lookup for every scoring path: the demo bank first, then anything an
+ * author published. Re-exported here so callers have one import for it.
+ */
+export { bankItemById as itemById };

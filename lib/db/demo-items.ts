@@ -21,11 +21,12 @@
  * science, and social science.
  */
 
-export type ItemPurpose =
-  | "exit_ticket"
-  | "readiness_check"
-  | "transfer_check"
-  | "spiral_review";
+/**
+ * Re-exported from the record shapes so the demo bank and authored items can
+ * never drift apart on what a purpose is.
+ */
+export type { ItemPurpose } from "./types";
+import type { ItemPurpose } from "./types";
 
 export type DemoChoice = {
   id: string;

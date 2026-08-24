@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { nextTimestamp } from "@/lib/clock";
 import { db, nextId } from "@/lib/db/store";
-import { itemsFor } from "@/lib/db/demo-items";
+import { itemsForLesson } from "@/lib/curriculum/lesson-bank";
 import {
   completeLesson,
   setStage,
@@ -21,7 +21,7 @@ import {
   submitTransferCheck,
 } from "@/lib/intervention/lifecycle";
 import { entryById } from "@/lib/intervention/library";
-import { itemById } from "@/lib/db/demo-items";
+import { bankItemById as itemById } from "@/lib/curriculum/lesson-bank";
 import { toFailure, type ActionResult } from "./result";
 
 /**
@@ -165,7 +165,14 @@ export async function submitExitTicketAction(
       answers: JSON.parse(String(formData.get("answers") ?? "[]")),
     });
 
-    const bank = itemsFor(input.lessonCode, "exit_ticket");
+    // The same bank the server will score against, resolved for this
+    // enrollment's course version.
+    const enrollment = db().enrollments.find((e) => e.id === input.enrollmentId);
+    const bank = itemsForLesson(
+      input.lessonCode,
+      "exit_ticket",
+      enrollment?.courseVersionId ?? null,
+    );
     for (const a of input.answers) {
       const bankItem = bank.find((i) => i.id === a.itemId);
       if (!bankItem || !bankItem.choices.some((c) => c.id === a.choiceId)) {
