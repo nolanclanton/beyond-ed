@@ -109,6 +109,14 @@ that comes back, a skill going stale. Red is for genuinely urgent states only.
 Warmth is doing a job, not decorating
 ([ADR 0008](docs/decisions/0008-entry-portals-and-colour-ethos.md)).
 
+The entry screen wears the brand gradient as a banner and then hands the page to
+the light canvas the product itself uses, so the portal cards are the same
+surfaces you meet inside. It is the one screen with motion: the banner rises on
+load, and content below the fold rises as it is scrolled to. Both are
+enhancements — `prefers-reduced-motion: reduce`, or no JavaScript, renders the
+finished page with nothing hidden
+([ADR 0009](docs/decisions/0009-entry-screen-layout-and-motion.md)).
+
 ## How it is built
 
 | Layer | Where |

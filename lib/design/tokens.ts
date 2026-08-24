@@ -103,18 +103,48 @@ export const TONE_CLASSES: Record<Tone, string> = {
 /**
  * The five portal accents. All are drawn from the blue-green family so no role
  * is signalled with a warm colour — warmth is reserved for memory.
+ *
+ * Each accent carries four uses: `tile` for a filled glyph tile, `text` for the
+ * role's label on a light surface (each meets 4.5:1 against `surface`), `soft`
+ * for a barely-there wash behind the tile, and `edge` for the hover border on
+ * the entry-screen portal cards.
  */
 export const PORTAL_ACCENTS = {
   /** Green — the learner's own surface. */
-  student: { tile: "bg-[#2A7A5C]" },
+  student: {
+    tile: "bg-[#2A7A5C]",
+    text: "text-[#2A7A5C]",
+    soft: "bg-[#2A7A5C]/8",
+    edge: "group-hover:border-[#2A7A5C]/45",
+  },
   /** Blue — decision and action. */
-  teacher: { tile: "bg-[#1F5FA0]" },
+  teacher: {
+    tile: "bg-[#1F5FA0]",
+    text: "text-[#1F5FA0]",
+    soft: "bg-[#1F5FA0]/8",
+    edge: "group-hover:border-[#1F5FA0]/45",
+  },
   /** Teal — the join between the two. */
-  site_admin: { tile: "bg-[#0F6E78]" },
+  site_admin: {
+    tile: "bg-[#0F6E78]",
+    text: "text-[#0F6E78]",
+    soft: "bg-[#0F6E78]/8",
+    edge: "group-hover:border-[#0F6E78]/45",
+  },
   /** Deep navy — the widest scope. */
-  org_admin: { tile: "bg-[#163F6B]" },
+  org_admin: {
+    tile: "bg-[#163F6B]",
+    text: "text-[#163F6B]",
+    soft: "bg-[#163F6B]/8",
+    edge: "group-hover:border-[#163F6B]/45",
+  },
   /** Deep forest — authorship, set apart from the learner's green. */
-  curriculum_author: { tile: "bg-[#1E5F4A]" },
+  curriculum_author: {
+    tile: "bg-[#1E5F4A]",
+    text: "text-[#1E5F4A]",
+    soft: "bg-[#1E5F4A]/8",
+    edge: "group-hover:border-[#1E5F4A]/45",
+  },
 } as const;
 
 /** Visible focus is mandatory (CLAUDE.md §12 — accessibility). */

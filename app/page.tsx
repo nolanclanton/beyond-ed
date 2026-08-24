@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -7,7 +9,8 @@ import { PORTALS } from "@/lib/auth/portals";
 import { COURSES } from "@/lib/curriculum/catalog";
 import { ensureSeeded } from "@/lib/db/seed";
 import { db } from "@/lib/db/store";
-import { FOCUS_RING, FOCUS_RING_ON_BRAND, PORTAL_ACCENTS } from "@/lib/design/tokens";
+import { ScrollReveal } from "@/lib/design/scroll-reveal";
+import { FOCUS_RING, PORTAL_ACCENTS } from "@/lib/design/tokens";
 import { CAPACITY_CONTRACT } from "@/lib/rules/versions";
 
 export const metadata: Metadata = {
@@ -23,6 +26,12 @@ export const metadata: Metadata = {
  * whose record demonstrates that role. Everyone else stays reachable from the
  * disclosure at the bottom, so nothing is lost — it is just no longer the first
  * thing a reviewer has to read.
+ *
+ * Layout: a single lit brand banner states what this is, then the page settles
+ * onto the light canvas the product itself uses, with the portal cards lifted
+ * over the seam. The dark field is the greeting, not the whole room — a wall of
+ * it is heavier than a first screen should be, and the cards read as the
+ * product's own surfaces because they are the same surfaces.
  *
  * This is not authentication. There is no password field because there are no
  * accounts (ADR 0003). Choosing a portal sets a cookie holding a seeded user
@@ -51,29 +60,74 @@ export default async function LandingPage({
       .sort((a, b) => a.lastName.localeCompare(b.lastName)),
   }));
 
-  return (
-    <div className="brand-field flex min-h-full flex-col text-white">
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-14 sm:px-6 sm:py-20">
-        <header className="text-center">
-          <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
-            Beyond<span className="text-brand-accent">.Ed</span>
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-white/85">
-            Coherent course pathways, evidence-based support, and decisions that
-            stay with a person.
-          </p>
-          <p className="mt-5 inline-flex items-center rounded-full border border-white/25 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-white/80">
-            Beta portal preview &middot; no sign-in required
-          </p>
-        </header>
+  const namedPeople = grouped.reduce((n, g) => n + g.users.length, 0);
 
+  /** The four figures that describe the build at a glance. */
+  const headline: readonly [string, string][] = [
+    [String(CAPACITY_CONTRACT.totalDays), "available workdays"],
+    [String(CAPACITY_CONTRACT.pathwayDays), "pathway days"],
+    [String(CAPACITY_CONTRACT.interventionDays), "intervention days"],
+    [String(COURSES.length), "courses authored"],
+  ];
+
+  return (
+    <div className="flex min-h-full flex-col bg-canvas">
+      <ScrollReveal />
+
+      <header className="brand-field-lit text-white">
+        <div className="mx-auto w-full max-w-6xl px-4 pb-28 pt-8 sm:px-6 sm:pb-32 sm:pt-10">
+          <div className="rise-in flex flex-wrap items-center justify-between gap-3">
+            <p className="text-base font-semibold tracking-tight">
+              Beyond<span className="text-brand-accent">.Ed</span>
+            </p>
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/25 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-white/80">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full bg-brand-accent"
+              />
+              Beta preview &middot; no sign-in required
+            </p>
+          </div>
+
+          <div
+            className="rise-in mt-16 max-w-3xl sm:mt-24"
+            style={{ "--rise-delay": "0.08s" } as CSSProperties}
+          >
+            <h1 className="text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+              Coherent pathways.
+              <br />
+              <span className="text-white/70">Evidence you can point at.</span>
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/80">
+              A grades 6&ndash;12 learning and academic-operations platform:
+              course pathways that hold together, support that follows the
+              evidence, and decisions that stay with a person.
+            </p>
+          </div>
+
+          <dl className="rise-in-group mt-14 grid grid-cols-2 gap-x-6 gap-y-7 border-t border-white/15 pt-8 sm:mt-16 sm:grid-cols-4">
+            {headline.map(([value, label]) => (
+              <div key={label}>
+                <dd className="text-3xl font-bold tracking-tight text-white">
+                  {value}
+                </dd>
+                <dt className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-white/60">
+                  {label}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </header>
+
+      <main className="mx-auto -mt-20 w-full max-w-6xl flex-1 px-4 pb-20 sm:px-6">
         {params.reset ? (
           <div
             role="status"
-            className="mx-auto mt-8 max-w-2xl rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-sm"
+            className="mb-6 rounded-2xl border border-positive-line bg-positive-surface px-5 py-4 text-sm text-ink"
           >
             <p className="font-semibold">Demo data rebuilt.</p>
-            <p className="mt-0.5 text-white/80">
+            <p className="mt-0.5 text-ink-muted">
               Everything is back to the seeded starting state.
             </p>
           </div>
@@ -81,71 +135,84 @@ export default async function LandingPage({
         {params.error ? (
           <div
             role="alert"
-            className="mx-auto mt-8 max-w-2xl rounded-xl border border-urgent-line bg-urgent-surface px-4 py-3 text-sm text-ink"
+            className="mb-6 rounded-2xl border border-urgent-line bg-urgent-surface px-5 py-4 text-sm text-ink"
           >
             <p className="font-semibold">That person is not in the demo roster.</p>
-            <p className="mt-0.5">Choose a portal below.</p>
+            <p className="mt-0.5 text-ink-muted">Choose a portal below.</p>
           </div>
         ) : null}
 
-        <section aria-labelledby="portals" className="mt-12">
+        <section aria-labelledby="portals">
           <h2 id="portals" className="sr-only">
             Choose a portal
           </h2>
-          <ul className="grid gap-5 md:grid-cols-2">
+          <ul className="reveal-group grid gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3">
             {PORTALS.map((portal, index) => {
               const accent = PORTAL_ACCENTS[portal.role];
-              const isLast = index === PORTALS.length - 1;
+              // The student portal leads: it is the surface the product exists
+              // for, so it takes the wide slot and a larger reading size.
+              const featured = index === 0;
               return (
                 <li
                   key={portal.role}
-                  className={
-                    isLast && PORTALS.length % 2 === 1 ? "md:col-span-2" : undefined
-                  }
+                  className={featured ? "lg:col-span-2" : undefined}
                 >
-                  <article className="flex h-full flex-col overflow-hidden rounded-2xl bg-surface text-ink shadow-lg">
-                    <div className={`h-1.5 ${accent.tile}`} aria-hidden="true" />
-                    <div className="flex flex-1 flex-col p-6">
+                  <form action={signInAs} className="reveal h-full">
+                    <input type="hidden" name="userId" value={portal.defaultUserId} />
+                    <button
+                      type="submit"
+                      className={`group flex h-full w-full flex-col rounded-2xl border border-line bg-surface p-6 text-left shadow-[0_1px_2px_rgba(28,31,35,0.06)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_rgba(12,58,71,0.45)] ${accent.edge} ${FOCUS_RING}`}
+                    >
                       <span
                         className={`flex h-11 w-11 items-center justify-center rounded-xl ${accent.tile}`}
                         aria-hidden="true"
                       >
                         <PortalGlyph role={portal.role} />
                       </span>
-                      <p className="mt-4 text-xs font-bold uppercase tracking-wider text-ink-muted">
+                      <span
+                        className={`mt-5 block text-[11px] font-bold uppercase tracking-[0.14em] ${accent.text}`}
+                      >
                         {portal.eyebrow}
-                      </p>
-                      <h3 className="mt-1 text-2xl font-bold tracking-tight text-ink">
+                      </span>
+                      <span
+                        className={`mt-1.5 block text-xl font-bold tracking-tight text-ink sm:text-2xl ${
+                          featured ? "lg:text-3xl" : ""
+                        }`}
+                      >
                         {portal.name}
-                      </h3>
-                      <p className="mt-2 flex-1 text-sm text-ink-muted">{portal.summary}</p>
-
-                      <form action={signInAs} className="mt-5">
-                        <input type="hidden" name="userId" value={portal.defaultUserId} />
-                        <button
-                          type="submit"
-                          className={`w-full rounded-lg px-5 py-3 text-base font-semibold text-white transition-opacity hover:opacity-90 ${accent.tile} ${FOCUS_RING}`}
-                        >
-                          {portal.cta}
-                        </button>
-                      </form>
-                      <p className="mt-3 text-xs text-ink-muted">{portal.dataNote}</p>
-                    </div>
-                  </article>
+                      </span>
+                      <span
+                        className={`mt-2.5 block flex-1 text-sm leading-relaxed text-ink-muted ${
+                          featured ? "max-w-xl lg:text-base" : ""
+                        }`}
+                      >
+                        {portal.summary}
+                      </span>
+                      <span className="mt-6 flex items-center gap-2 border-t border-line pt-4 text-sm font-semibold text-ink">
+                        {portal.cta}
+                        <ArrowRight />
+                      </span>
+                      <span className="mt-1.5 block text-xs text-ink-muted">
+                        {portal.dataNote}
+                      </span>
+                    </button>
+                  </form>
                 </li>
               );
             })}
           </ul>
         </section>
 
-        <section aria-labelledby="examples" className="mt-6">
+        <section aria-labelledby="examples" className="mt-5">
           <h2 id="examples" className="sr-only">
             Example lessons
           </h2>
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/20 bg-white/5 px-6 py-5">
+          <div className="reveal flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary-line bg-primary-surface px-6 py-5">
             <div>
-              <p className="text-base font-semibold">Explore example lessons</p>
-              <p className="mt-0.5 text-sm text-white/75">
+              <p className="text-base font-semibold text-ink">
+                Explore example lessons
+              </p>
+              <p className="mt-0.5 text-sm text-ink-muted">
                 Operation Firewall and City Transit &middot; open from the student
                 portal
               </p>
@@ -154,24 +221,25 @@ export default async function LandingPage({
               <input type="hidden" name="userId" value="u_amara" />
               <button
                 type="submit"
-                className={`rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 ${FOCUS_RING_ON_BRAND}`}
+                className={`group inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-strong ${FOCUS_RING}`}
               >
-                View examples &rarr;
+                View examples
+                <ArrowRight />
               </button>
             </form>
           </div>
         </section>
 
         <section aria-labelledby="about" className="mt-14">
-          <h2 id="about" className="sr-only">
-            About this build
+          <h2 id="about" className="reveal text-xl font-bold tracking-tight text-ink">
+            What this build is, plainly
           </h2>
-          <div className="grid gap-8 md:grid-cols-2">
-            <div>
-              <p className="text-sm font-semibold text-white">
+          <div className="reveal-group mt-5 grid gap-4 sm:gap-5 lg:grid-cols-3">
+            <div className="reveal rounded-2xl border border-line bg-surface p-6">
+              <p className="text-sm font-semibold text-ink">
                 What is behind the demo
               </p>
-              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <dl className="mt-4 flex flex-col gap-2.5 text-sm">
                 {[
                   [CAPACITY_CONTRACT.totalDays, "available workdays"],
                   [CAPACITY_CONTRACT.pathwayDays, "normal pathway days"],
@@ -181,64 +249,74 @@ export default async function LandingPage({
                   [students, "students"],
                   [teachers, "teachers"],
                 ].map(([value, label]) => (
-                  <div key={String(label)}>
-                    <dt className="sr-only">{String(label)}</dt>
-                    <dd className="text-white/80">
-                      <strong className="font-bold text-white">{value}</strong>{" "}
-                      {label}
-                    </dd>
+                  <div
+                    key={String(label)}
+                    className="flex items-baseline justify-between gap-4 border-b border-line pb-2.5 last:border-0 last:pb-0"
+                  >
+                    <dt className="text-ink-muted">{label}</dt>
+                    <dd className="font-bold tabular-nums text-ink">{value}</dd>
                   </div>
                 ))}
               </dl>
             </div>
 
-            <div>
-              <p className="text-sm font-semibold text-white">
-                What this build is, plainly
+            <div className="reveal rounded-2xl border border-line bg-surface p-6 lg:col-span-2">
+              <p className="text-sm font-semibold text-ink">
+                No accounts, no invented certainty, no assistant
               </p>
-              <p className="mt-3 text-sm text-white/80">
-                There is no password field because there are no accounts.
-                Choosing a portal sets a cookie holding a seeded user id, which
-                the server reads and scope-checks on every request like a real
-                session. Real sign-in arrives with Supabase Auth.
-              </p>
-              <p className="mt-3 text-sm text-white/80">
-                Data lives in memory and resets when the server restarts. The
-                seeded tenant &mdash; {organization?.name} &mdash; is a fictional
-                district, and every person, roster, grade, and result in it is
-                invented. Beyond.Ed is standalone software: the organization is a
-                record it reads, not something built into the product.
-              </p>
-              <p className="mt-3 text-sm text-white/80">
-                Beyond.Ed contains no AI tutor, chatbot, copilot, or
-                conversational assistant. Individualized review uses transparent,
-                versioned curriculum rules over stored evidence.
-              </p>
+              <div className="mt-4 grid gap-5 sm:grid-cols-2">
+                <div className="flex flex-col gap-3 text-sm leading-relaxed text-ink-muted">
+                  <p>
+                    There is no password field because there are no accounts.
+                    Choosing a portal sets a cookie holding a seeded user id,
+                    which the server reads and scope-checks on every request like
+                    a real session. Real sign-in arrives with Supabase Auth.
+                  </p>
+                  <p>
+                    Data lives in memory and resets when the server restarts.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3 text-sm leading-relaxed text-ink-muted">
+                  <p>
+                    The seeded tenant &mdash; {organization?.name} &mdash; is a
+                    fictional district, and every person, roster, grade, and
+                    result in it is invented. Beyond.Ed is standalone software:
+                    the organization is a record it reads, not something built
+                    into the product.
+                  </p>
+                  <p>
+                    Beyond.Ed contains no AI tutor, chatbot, copilot, or
+                    conversational assistant. Individualized review uses
+                    transparent, versioned curriculum rules over stored evidence.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section aria-labelledby="people" className="mt-12">
-          <details className="rounded-2xl border border-white/20 bg-white/5">
+        <section aria-labelledby="people" className="mt-5">
+          <details className="reveal group rounded-2xl border border-line bg-surface">
             <summary
-              className={`cursor-pointer list-none px-6 py-4 text-sm font-semibold text-white ${FOCUS_RING_ON_BRAND}`}
+              className={`flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl px-6 py-5 text-sm font-semibold text-ink ${FOCUS_RING}`}
             >
+              <Chevron />
               <h2 id="people" className="inline">
                 Open as a specific person instead
               </h2>
-              <span className="ml-2 font-normal text-white/70">
-                ({students + teachers + grouped.reduce((n, g) => n + (g.role === "site_admin" ? g.users.length : 0), 0)}{" "}
-                people seeded &mdash; these are the hand-written ones)
+              <span className="font-normal text-ink-muted">
+                ({students + teachers} people seeded &mdash; {namedPeople}{" "}
+                hand-written)
               </span>
             </summary>
-            <div className="border-t border-white/15 px-6 py-5">
-              <div className="flex flex-col gap-5">
+            <div className="border-t border-line px-6 py-6">
+              <div className="flex flex-col gap-6">
                 {grouped.map(({ role, users }) => (
                   <div key={role}>
-                    <p className="text-xs font-bold uppercase tracking-wider text-white/70">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">
                       {ROLE_PRESENTATION[role].label}
                     </p>
-                    <ul className="mt-2 flex flex-wrap gap-2">
+                    <ul className="mt-2.5 flex flex-wrap gap-2">
                       {users.map((user) => {
                         const site = d.sites.find((s) => s.id === user.siteId);
                         return (
@@ -247,12 +325,12 @@ export default async function LandingPage({
                               <input type="hidden" name="userId" value={user.id} />
                               <button
                                 type="submit"
-                                className={`flex flex-col items-start rounded-lg border border-white/25 bg-white/5 px-3.5 py-2 text-left transition-colors hover:bg-white/15 ${FOCUS_RING_ON_BRAND}`}
+                                className={`flex flex-col items-start rounded-lg border border-line bg-canvas px-3.5 py-2 text-left transition-colors hover:border-primary-line hover:bg-primary-surface ${FOCUS_RING}`}
                               >
-                                <span className="text-sm font-semibold text-white">
+                                <span className="text-sm font-semibold text-ink">
                                   {user.firstName} {user.lastName}
                                 </span>
-                                <span className="text-xs text-white/70">
+                                <span className="text-xs text-ink-muted">
                                   {user.gradeLevel
                                     ? `Grade ${user.gradeLevel}`
                                     : ROLE_PRESENTATION[role].scope}
@@ -271,15 +349,15 @@ export default async function LandingPage({
                 ))}
               </div>
 
-              <form action={resetDemoData} className="mt-6 border-t border-white/15 pt-5">
-                <p className="text-sm text-white/80">
+              <form action={resetDemoData} className="mt-7 border-t border-line pt-5">
+                <p className="text-sm text-ink-muted">
                   Rebuild the seeded store from scratch. Anything assigned,
                   dismissed, submitted, or published during this session is
                   discarded.
                 </p>
                 <button
                   type="submit"
-                  className={`mt-3 rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 ${FOCUS_RING_ON_BRAND}`}
+                  className={`mt-3 rounded-lg border border-line-strong bg-surface px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-sunken ${FOCUS_RING}`}
                 >
                   Rebuild demo data
                 </button>
@@ -287,15 +365,64 @@ export default async function LandingPage({
             </div>
           </details>
         </section>
-
-        <p className="mt-12 text-center text-xs text-white/55">
-          <Link href="/today" className={`underline underline-offset-4 ${FOCUS_RING_ON_BRAND}`}>
-            Beyond.Ed
-          </Link>{" "}
-          &mdash; a grades 6&ndash;12 learning and academic-operations platform.
-        </p>
       </main>
+
+      <footer className="border-t border-line">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-6 text-xs text-ink-muted sm:px-6">
+          <p>
+            <Link
+              href="/today"
+              className={`font-semibold text-ink underline-offset-4 hover:underline ${FOCUS_RING}`}
+            >
+              Beyond.Ed
+            </Link>{" "}
+            &mdash; a grades 6&ndash;12 learning and academic-operations
+            platform.
+          </p>
+          <p>Beta preview &middot; seeded demo data</p>
+        </div>
+      </footer>
     </div>
+  );
+}
+
+/** The affordance arrow on a card or button. Decorative — the label carries it. */
+function ArrowRight() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="transition-transform duration-200 group-hover:translate-x-0.5"
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
+  );
+}
+
+/** Disclosure marker for the "specific person" panel. Decorative. */
+function Chevron() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="text-ink-muted transition-transform duration-200 group-open:rotate-90"
+    >
+      <path d="M6 3l5 5-5 5" />
+    </svg>
   );
 }
 
