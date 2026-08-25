@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
 import { courseLessons, getCourse } from "@/lib/curriculum/catalog";
-import { db } from "@/lib/db/store";
+import { groupBy } from "@/lib/collections";
+import { db, lessonStatesFor } from "@/lib/db/store";
 import {
   Banner,
   Card,
@@ -64,8 +65,11 @@ export default async function SitePage() {
   const enrollmentsWithoutVersion = enrollments.filter(
     (e) => !d.courseVersions.some((v) => v.id === e.courseVersionId),
   );
+  // Grouped once. Scanning every enrollment per student is quadratic, and a
+  // full site is 126 students against 504 enrollments.
+  const enrollmentsByStudent = groupBy(enrollments, (e) => e.studentId);
   const shortPlacements = students.filter((s) => {
-    const count = enrollments.filter((e) => e.studentId === s.id).length;
+    const count = enrollmentsByStudent.get(s.id)?.length ?? 0;
     return count > 0 && count < 4;
   });
 
@@ -370,13 +374,16 @@ export default async function SitePage() {
               </thead>
               <tbody className="divide-y divide-line">
                 {students.map((s) => {
-                  const mine = enrollments.filter((e) => e.studentId === s.id);
+                  const mine = enrollmentsByStudent.get(s.id) ?? [];
                   const days = mine.reduce((n, e) => {
                     const course = getCourse(e.courseTitle);
                     if (!course) return n;
+                    // Indexed by enrollment. Filtering the district's whole
+                    // lesson-state table once per student is what made this
+                    // page the slowest in the product.
                     const done = new Set(
-                      d.lessonStates
-                        .filter((x) => x.enrollmentId === e.id && x.status === "completed")
+                      lessonStatesFor(e.id)
+                        .filter((x) => x.status === "completed")
                         .map((x) => x.lessonCode),
                     );
                     return (

@@ -126,7 +126,7 @@ const SEED_STUDENTS: SeedStudent[] = [
         { day: 3, errorCode: "distribution-and-like-terms" },
         { day: 4, errorCode: "inverse-operation" }] },
       { title: "English 8", at: "ELA-08-L018", weak: [{ day: 7, errorCode: "ungrounded-inference" }] },
-      { title: "Integrated Science 8", at: "SCI-08-L016" },
+      { title: "Integrated Science 8", at: "SCI-08-L020" },
       { title: "Grade 8 U.S. Growth and Conflict", at: "HSS-08-L020" },
     ],
   },
@@ -135,7 +135,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     courses: [
       { title: "Math 1", at: "MATH-1-L046", weak: [{ day: 16, errorCode: "variable-interpretation" }] },
       { title: "English 9", at: "ELA-09-L021" },
-      { title: "Biology", at: "SCI-BIO-L012" },
+      { title: "Biology", at: "SCI-BIO-L020" },
       { title: "Human Geography", at: "HSS-HGEO-L010" },
     ],
   },
@@ -144,7 +144,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     courses: [
       { title: "Math 1", at: "MATH-1-L030", weak: [{ day: 2, errorCode: "unit-and-scale" }] },
       { title: "English 9", at: "ELA-09-L018", weak: [{ day: 7, errorCode: "quotation-without-commentary" }] },
-      { title: "Biology", at: "SCI-BIO-L014" },
+      { title: "Biology", at: "SCI-BIO-L022" },
       { title: "Human Geography", at: "HSS-HGEO-L012" },
     ],
   },
@@ -153,7 +153,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     courses: [
       { title: "Math 2", at: "MATH-2-L025", weak: [{ day: 6, errorCode: "equality-and-equivalence" }] },
       { title: "English 10", at: "ELA-10-L018" },
-      { title: "Chemistry", at: "SCI-CHEM-L016" },
+      { title: "Chemistry", at: "SCI-CHEM-L020" },
       { title: "Modern World History", at: "HSS-MWH-L020", weak: [{ day: 5, errorCode: "single-cause" }] },
     ],
   },
@@ -162,7 +162,7 @@ const SEED_STUDENTS: SeedStudent[] = [
     courses: [
       { title: "Math 3", at: "MATH-3-L020" },
       { title: "English 11", at: "ELA-11-L021", weak: [{ day: 7, errorCode: "quotation-without-commentary" }] },
-      { title: "Physics", at: "SCI-PHYS-L018" },
+      { title: "Physics", at: "SCI-PHYS-L022" },
       { title: "US History", at: "HSS-US-L022" },
     ],
   },

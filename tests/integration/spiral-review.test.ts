@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { subjectForLesson } from "@/lib/curriculum/catalog";
+import { locateLesson, subjectForLesson } from "@/lib/curriculum/catalog";
 import { ALL_ITEMS, itemById } from "@/lib/db/demo-items";
 import { ensureSeeded } from "@/lib/db/seed";
 import { clearDatabase, db, lessonStatesFor } from "@/lib/db/store";
+import { currentEvidence } from "@/lib/evidence/ledger";
+import { upcomingStandardsFor } from "@/lib/intervention/queue";
 import { spiralReviewFor } from "@/lib/learning/lesson";
 import { SPIRAL_REVIEW_MAX_ITEMS } from "@/lib/rules/versions";
 
@@ -119,15 +121,27 @@ describe("Spiral Review subject scoping", () => {
     }
   });
 
-  it("offers nothing rather than something wrong where no items exist", () => {
-    // Physics has no authored items. The correct behaviour is an empty set the
-    // surface can explain, never a borrowed item from another course.
-    const enrollment = db().enrollments.find((e) => e.id === "enr_sofia_Physics");
-    if (!enrollment) throw new Error("seed missing");
-    const state = lessonStatesFor(enrollment.id).find((s) => s.status === "available");
-    if (!state) throw new Error("seed missing");
-    const result = spiralReviewFor("u_sofia", enrollment.id, state.lessonCode);
-    expect(result.items).toHaveLength(0);
+  it("never offers a skill the student has neither met nor is about to meet", () => {
+    // The pool is weak skills, upcoming prerequisites, and cumulative skills.
+    // An item outside that set would be a question from the same subject picked
+    // for no reason the student could be told.
+    let checked = 0;
+    for (const { enrollment, lessonCode } of openLessons()) {
+      const seen = new Set(
+        currentEvidence({ studentId: enrollment.studentId }).map((e) => e.skill),
+      );
+      const upcoming = new Set(upcomingStandardsFor(enrollment, lessonCode));
+      const result = spiralReviewFor(enrollment.studentId, enrollment.id, lessonCode);
+      for (const selected of result.items) {
+        const skill = itemById(selected.itemId)!.skill;
+        expect(
+          seen.has(skill) || upcoming.has(skill),
+          `${lessonCode} offered ${skill}, which is neither met nor upcoming`,
+        ).toBe(true);
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
   });
 
   it("reaches the full set in social science, which was the thinnest", () => {
@@ -165,6 +179,21 @@ describe("Spiral Review subject scoping", () => {
     const first = spiralReviewFor("u_amara", enrollment.id, "HSS-06-L001");
     const second = spiralReviewFor("u_amara", enrollment.id, "HSS-06-L001");
     expect(second.items.map((i) => i.itemId)).toEqual(first.items.map((i) => i.itemId));
+  });
+
+  it("keeps every demo item on a lesson that actually claims its standard", () => {
+    // An item aligned to a standard its lesson does not carry produces evidence
+    // pointing at the wrong place, which is worse than no item at all. The
+    // studio enforces this for authored items; this is the same rule for the
+    // demo bank (CLAUDE.md §8).
+    for (const i of ALL_ITEMS) {
+      const at = locateLesson(i.lessonCode);
+      expect(at, `${i.id} points at ${i.lessonCode}, which is not a lesson`).toBeDefined();
+      expect(
+        at!.lesson.primaryStandard,
+        `${i.id} claims ${i.standard}, but ${i.lessonCode} carries ${at!.lesson.primaryStandard}`,
+      ).toBe(i.standard);
+    }
   });
 
   it("keeps every authored item pointing at a real catalog lesson", () => {

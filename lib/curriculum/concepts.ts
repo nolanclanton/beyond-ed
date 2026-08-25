@@ -11,6 +11,7 @@
  * (CLAUDE.md §8).
  */
 import rawConcepts from "./data/concepts.json";
+import { pushInto } from "@/lib/collections";
 
 import { unitById } from "./catalog";
 
@@ -32,7 +33,7 @@ export const CONCEPT_EDGES: readonly ConceptEdge[] = data.edges;
 
 const byUnit = new Map<string, ConceptEdge[]>();
 for (const edge of CONCEPT_EDGES) {
-  byUnit.set(edge.unitId, [...(byUnit.get(edge.unitId) ?? []), edge]);
+  pushInto(byUnit, edge.unitId, edge);
 }
 
 export function conceptEdgesForUnit(unitId: string): ConceptEdge[] {

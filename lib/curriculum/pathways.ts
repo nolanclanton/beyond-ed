@@ -11,6 +11,7 @@
  * Placement is a human decision; the graph records what the legal moves are.
  */
 import rawPathways from "./data/pathways.json";
+import { pushInto } from "@/lib/collections";
 
 import {
   COURSES,
@@ -37,8 +38,8 @@ export const PATHWAY_EDGES: readonly PathwayEdge[] = data.pathways;
 const outgoing = new Map<string, PathwayEdge[]>();
 const incoming = new Map<string, PathwayEdge[]>();
 for (const edge of PATHWAY_EDGES) {
-  outgoing.set(edge.fromCourseId, [...(outgoing.get(edge.fromCourseId) ?? []), edge]);
-  incoming.set(edge.toCourseId, [...(incoming.get(edge.toCourseId) ?? []), edge]);
+  pushInto(outgoing, edge.fromCourseId, edge);
+  pushInto(incoming, edge.toCourseId, edge);
 }
 
 /** Courses this one leads into. */

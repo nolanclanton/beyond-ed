@@ -19,6 +19,7 @@ import {
   type CatalogCourse,
 } from "@/lib/curriculum/catalog";
 import { prerequisiteSupports } from "@/lib/curriculum/prerequisites";
+import { pushInto } from "@/lib/collections";
 
 import { SUPPORT_MINUTES, supportById, type BankSupport } from "./bank";
 
@@ -89,8 +90,8 @@ function buildIndex(): Index {
         seen.set(key, entry);
 
         const standardKey = `${course.id}::${standard}`;
-        byStandard.set(standardKey, [...(byStandard.get(standardKey) ?? []), entry]);
-        byId.set(support.id, [...(byId.get(support.id) ?? []), entry]);
+        pushInto(byStandard, standardKey, entry);
+        pushInto(byId, support.id, entry);
       }
     }
   }

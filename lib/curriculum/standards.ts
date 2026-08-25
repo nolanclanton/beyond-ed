@@ -10,6 +10,7 @@
  * publishes it. See `coverageReport`.
  */
 import rawStandards from "./data/standards.json";
+import { pushInto } from "@/lib/collections";
 
 import { COURSES, courseLessons, type CatalogCourse } from "./catalog";
 
@@ -47,9 +48,20 @@ export const SOURCES: readonly StandardsSource[] = data.sources;
 
 const byCourse = new Map<string, StandardRecord[]>();
 const byCourseAndCode = new Map<string, StandardRecord>();
+/**
+ * First record per bare code, for `describeStandard`.
+ *
+ * Grade-band codes such as `RL.9-10.1` appear in several courses with the same
+ * text, so the first is the description. Indexed rather than scanned because a
+ * unit page asks for fifteen of these and a course page for a hundred and
+ * thirty-five — a linear search over 1,907 records is the difference between a
+ * page that renders and one that stalls.
+ */
+const byCode = new Map<string, StandardRecord>();
 for (const record of STANDARDS) {
-  byCourse.set(record.courseId, [...(byCourse.get(record.courseId) ?? []), record]);
+  pushInto(byCourse, record.courseId, record);
   byCourseAndCode.set(`${record.courseId}::${record.code}`, record);
+  if (!byCode.has(record.code)) byCode.set(record.code, record);
 }
 
 const sourceById = new Map(SOURCES.map((s) => [s.id, s]));
@@ -65,14 +77,9 @@ export function standardRecord(
   return byCourseAndCode.get(`${courseId}::${code}`);
 }
 
-/**
- * A standard's plain-language description, from whichever course defines it.
- *
- * Grade-band codes such as `RL.9-10.1` appear in more than one course; the text
- * is the same in each, so the first match is the description.
- */
+/** A standard's plain-language description, from whichever course defines it. */
 export function describeStandard(code: string): StandardRecord | undefined {
-  return STANDARDS.find((s) => s.code === code);
+  return byCode.get(code);
 }
 
 export function sourceFor(sourceId: string): StandardsSource | undefined {

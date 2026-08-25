@@ -22,58 +22,15 @@
  */
 
 /**
- * Re-exported from the record shapes so the demo bank and authored items can
- * never drift apart on what a purpose is.
+ * The record shape and the builder live in `demo-item.ts` so the per-course
+ * recall banks in `demo-recall.ts` can be written against the same shape
+ * without a circular import. Both are re-exported here, because every reader in
+ * the app imports the bank from this module.
  */
-export type { ItemPurpose } from "./types";
-import type { ItemPurpose } from "./types";
-
-export type DemoChoice = {
-  id: string;
-  text: string;
-  /** The error family this distractor reveals. Null on the correct choice. */
-  errorCode: string | null;
-};
-
-export type DemoItem = {
-  id: string;
-  lessonCode: string;
-  /** The primary standard the lesson this item sits on claims. */
-  standard: string;
-  /** The reusable skill this item measures. Equal to the standard here. */
-  skill: string;
-  purpose: ItemPurpose;
-  stem: string;
-  choices: DemoChoice[];
-  correctChoiceId: string;
-  /** Shown after completion — explanations appear after, never during. */
-  rationale: string;
-};
-
-const item = (
-  id: string,
-  lessonCode: string,
-  standard: string,
-  purpose: ItemPurpose,
-  stem: string,
-  choices: [string, string | null][],
-  correct: number,
-  rationale: string,
-): DemoItem => ({
-  id,
-  lessonCode,
-  standard,
-  skill: standard,
-  purpose,
-  stem,
-  choices: choices.map(([text, errorCode], i) => ({
-    id: `${id}-${"abcd"[i]}`,
-    text,
-    errorCode: i === correct ? null : errorCode,
-  })),
-  correctChoiceId: `${id}-${"abcd"[correct]}`,
-  rationale,
-});
+export type { DemoChoice, DemoItem, ItemPurpose } from "./demo-item";
+import { item, type DemoItem, type ItemPurpose } from "./demo-item";
+import { RECALL_BANKS } from "./demo-recall";
+import { pushInto } from "@/lib/collections";
 
 // ---------------------------------------------------------------------------
 // Mathematics 6 · Unit 3 · MATH-06-L035 · 6.RP.2 — unit rate
@@ -880,6 +837,7 @@ const GRADE9_RECALL: DemoItem[] = [
 ];
 
 const ALL_ITEMS: DemoItem[] = [
+  ...RECALL_BANKS,
   ...SPIRAL_BANK,
   ...SPIRAL_BANK_EXTRA,
   ...HSS_06_RECALL,
@@ -900,7 +858,7 @@ const ALL_ITEMS: DemoItem[] = [
 
 const byLesson = new Map<string, DemoItem[]>();
 for (const i of ALL_ITEMS) {
-  byLesson.set(i.lessonCode, [...(byLesson.get(i.lessonCode) ?? []), i]);
+  pushInto(byLesson, i.lessonCode, i);
 }
 
 const byId = new Map(ALL_ITEMS.map((i) => [i.id, i]));

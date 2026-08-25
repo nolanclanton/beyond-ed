@@ -198,9 +198,22 @@ export function unitForLesson(lessonCode: string): CatalogUnit | undefined {
   return byLessonCode.get(lessonCode)?.unit;
 }
 
-/** Every lesson in a course, in pathway order. */
-export function courseLessons(course: CatalogCourse): CatalogLesson[] {
-  return course.units.flatMap((u) => u.lessons);
+/**
+ * Every lesson in a course, in pathway order.
+ *
+ * Cached per course. The flattened array is 135 entries and this is called once
+ * per student per course on roster pages — rebuilding it each time was tens of
+ * thousands of allocations for a list that never changes. The array is shared:
+ * treat it as read-only, and copy before sorting.
+ */
+const lessonsByCourse = new Map<string, readonly CatalogLesson[]>();
+
+export function courseLessons(course: CatalogCourse): readonly CatalogLesson[] {
+  const cached = lessonsByCourse.get(course.id);
+  if (cached) return cached;
+  const lessons = course.units.flatMap((u) => u.lessons);
+  lessonsByCourse.set(course.id, lessons);
+  return lessons;
 }
 
 export function findLesson(

@@ -21,6 +21,7 @@ import {
   RULE_VERSIONS,
 } from "@/lib/rules/versions";
 
+import { groupBy } from "@/lib/collections";
 import type { EvidenceRecord } from "@/lib/db/types";
 import type { MasteryEstimate } from "@/lib/mastery/profile";
 
@@ -256,10 +257,7 @@ function detectTrigger(
 
   // --- Immediate: same Exit Ticket failed twice ----------------------------
   const exitFails = misses.filter((e) => e.source === "exit_ticket");
-  const exitLessons = new Map<string, EvidenceRecord[]>();
-  for (const e of exitFails) {
-    exitLessons.set(e.lessonCode, [...(exitLessons.get(e.lessonCode) ?? []), e]);
-  }
+  const exitLessons = groupBy(exitFails, (e) => e.lessonCode);
   for (const [lessonCode, fails] of [...exitLessons.entries()].sort()) {
     const attempts = new Set(fails.map((f) => f.attempt));
     if (attempts.size >= 2) {
@@ -400,15 +398,6 @@ function rank(
 }
 
 // --- small pure helpers ----------------------------------------------------
-
-function groupBy<T, K>(xs: readonly T[], key: (x: T) => K): Map<K, T[]> {
-  const m = new Map<K, T[]>();
-  for (const x of xs) {
-    const k = key(x);
-    m.set(k, [...(m.get(k) ?? []), x]);
-  }
-  return m;
-}
 
 function rate(rows: EvidenceRecord[]): number {
   if (rows.length === 0) return 0;

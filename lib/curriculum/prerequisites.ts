@@ -14,6 +14,7 @@
  * and a lesson id does not.
  */
 import rawPrerequisites from "./data/prerequisites.json";
+import { pushInto } from "@/lib/collections";
 
 import { locateLesson } from "./catalog";
 
@@ -98,7 +99,7 @@ export function dependentsOf(lessonCode: string): string[] {
     dependents = new Map();
     for (const [code, links] of Object.entries(data.byLesson)) {
       for (const [id] of links) {
-        dependents.set(id, [...(dependents.get(id) ?? []), code]);
+        pushInto(dependents, id, code);
       }
     }
   }
