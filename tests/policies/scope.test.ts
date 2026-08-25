@@ -22,6 +22,7 @@ import {
 import {
   authoredLesson,
   authoringGate,
+  saveLessonBlock,
   saveLessonScript,
 } from "@/lib/curriculum/lesson-authoring";
 import { resolveLessonContent } from "@/lib/curriculum/lesson-bank";
@@ -271,7 +272,7 @@ describe("default deny", () => {
 
 /**
  * Authored lesson content — the contract `supabase/policies/authored_lessons.sql`
- * must satisfy (migration 0006).
+ * and `supabase/policies/lesson_blocks.sql` must satisfy (migrations 0006, 0007).
  *
  * Two grants, each with its negative: the curriculum-author authorization, and
  * the draft-only rule that keeps a published lesson from changing under a
@@ -282,7 +283,7 @@ describe("default deny", () => {
 describe("authored lesson content: author authorization and the draft rule", () => {
   const DRAFT = "cv_Mathematics_6_2026_2";
   const PUBLISHED = "cv_Mathematics_6_2026_1";
-  const LESSON = "M6-U1-L2";
+  const LESSON = "MATH-06-L035";
 
   const script = (versionId: string) => ({
     versionId,
@@ -290,12 +291,32 @@ describe("authored lesson content: author authorization and the draft rule", () 
     relevance: "",
     goal: "Find and use a unit rate.",
     successCriteria: [],
-    instruction: [],
     vocabulary: [],
     workedModel: [],
     guidedPractice: [],
     independentTask: "",
     notesOutline: [],
+    reason: "Policy test.",
+  });
+
+  const canvasBlock = (versionId: string) => ({
+    versionId,
+    lessonCode: LESSON,
+    blockId: null,
+    kind: "text" as const,
+    text: "A rate compares two quantities with different units.",
+    title: "",
+    tone: "note" as const,
+    ordered: false,
+    items: [],
+    term: "",
+    meaning: "",
+    caption: "",
+    headers: [],
+    rows: [],
+    url: "",
+    alt: "",
+    videoId: "",
     reason: "Policy test.",
   });
 
@@ -318,6 +339,29 @@ describe("authored lesson content: author authorization and the draft rule", () 
     );
     expect(authoredLesson(PUBLISHED, LESSON)).toBeUndefined();
     expect(authoringGate(user("u_haddad"), PUBLISHED).editable).toBe(false);
+  });
+
+  it("POSITIVE: an author composes the canvas inside a draft", () => {
+    const placed = saveLessonBlock(
+      user("u_haddad"),
+      canvasBlock(DRAFT),
+      "pol-block-1",
+    );
+    expect(placed.kind).toBe("text");
+    expect(authoredLesson(DRAFT, LESSON)?.blocks).toHaveLength(1);
+  });
+
+  it("NEGATIVE: an administrator without the authorization composes nothing", () => {
+    expect(() =>
+      saveLessonBlock(user("u_okonjo"), canvasBlock(DRAFT), "pol-block-2"),
+    ).toThrow();
+    expect(authoredLesson(DRAFT, LESSON)).toBeUndefined();
+  });
+
+  it("NEGATIVE: the canvas of a published version is closed to everyone", () => {
+    expect(() =>
+      saveLessonBlock(user("u_haddad"), canvasBlock(PUBLISHED), "pol-block-3"),
+    ).toThrow(/draft/);
   });
 
   it("POSITIVE: everyone in the organization can read published content", () => {

@@ -12,7 +12,10 @@ import {
   authoringGate,
   createDraftVersion,
   lessonReadiness,
+  moveLessonBlock,
+  removeLessonBlock,
   removeQuizItem,
+  saveLessonBlock,
   saveLessonScript,
   saveQuizItem,
 } from "@/lib/curriculum/lesson-authoring";
@@ -23,7 +26,11 @@ import {
 } from "@/lib/curriculum/lesson-bank";
 import { ensureSeeded } from "@/lib/db/seed";
 import { clearDatabase, db } from "@/lib/db/store";
-import type { QuizItemInput, ScriptInput } from "@/lib/curriculum/lesson-authoring";
+import type {
+  BlockInput,
+  QuizItemInput,
+  ScriptInput,
+} from "@/lib/curriculum/lesson-authoring";
 import type { User } from "@/lib/db/types";
 
 function user(id: string): User {
@@ -32,11 +39,13 @@ function user(id: string): User {
   return u;
 }
 
-/** The seeded Mathematics 6 draft, and a lesson with real primary standards. */
+/** The seeded Mathematics 6 draft, and the unit-rate lesson inside it. */
 const DRAFT = "cv_Mathematics_6_2026_2";
 const PUBLISHED = "cv_Mathematics_6_2026_1";
-const LESSON = "M6-U1-L2";
+const LESSON = "MATH-06-L035";
 const STANDARD = "6.RP.2";
+/** A lesson in the same course that claims a different standard. */
+const OTHER_LESSON = "MATH-06-L004";
 
 function script(overrides: Partial<ScriptInput> = {}): ScriptInput {
   return {
@@ -45,7 +54,6 @@ function script(overrides: Partial<ScriptInput> = {}): ScriptInput {
     relevance: "Two stores price the same pens differently.",
     goal: "Find and use a unit rate.",
     successCriteria: ["I can state a unit rate with its units."],
-    instruction: ["A rate compares two quantities with different units."],
     vocabulary: [{ term: "Unit rate", meaning: "A rate stated per one unit." }],
     workedModel: [{ step: "Divide 150 by 5.", reasoning: "Per gallon means per one." }],
     guidedPractice: [
@@ -54,6 +62,30 @@ function script(overrides: Partial<ScriptInput> = {}): ScriptInput {
     independentTask: "Compare two package sizes.",
     notesOutline: ["Rate versus unit rate"],
     reason: "Authoring the unit-rate lesson.",
+    ...overrides,
+  };
+}
+
+function block(overrides: Partial<BlockInput> = {}): BlockInput {
+  return {
+    versionId: DRAFT,
+    lessonCode: LESSON,
+    blockId: null,
+    kind: "text",
+    text: "A rate compares two quantities with different units.",
+    title: "",
+    tone: "note",
+    ordered: false,
+    items: [],
+    term: "",
+    meaning: "",
+    caption: "",
+    headers: [],
+    rows: [],
+    url: "",
+    alt: "",
+    videoId: "",
+    reason: "Writing the canvas.",
     ...overrides,
   };
 }
@@ -88,7 +120,7 @@ describe("lesson authoring: who may write (CLAUDE.md §3, §7)", () => {
     const lesson = saveLessonScript(user("u_haddad"), script(), "k-script-1");
 
     expect(lesson.goal).toBe("Find and use a unit rate.");
-    expect(lesson.instruction).toHaveLength(1);
+    expect(lesson.successCriteria).toHaveLength(1);
     expect(authoredLesson(DRAFT, LESSON)?.id).toBe(lesson.id);
   });
 
@@ -218,14 +250,25 @@ describe("quiz items must be able to direct something (CLAUDE.md §8)", () => {
     ).toThrow(/two and six choices/);
   });
 
-  it("NEGATIVE: a lesson with no primary standard cannot carry items", () => {
+  it("NEGATIVE: an item cannot claim a standard another lesson carries", () => {
+    // The whole point of a coverage record is that it belongs to one lesson.
     expect(() =>
       saveQuizItem(
         user("u_haddad"),
-        quizItem({ lessonCode: "M6-U0-L1", standard: STANDARD }),
+        quizItem({ lessonCode: OTHER_LESSON, standard: STANDARD }),
         "k-item-5",
       ),
-    ).toThrow(/nothing to align to/);
+    ).toThrow(/not primary coverage/);
+  });
+
+  it("NEGATIVE: an item cannot be written against a lesson in another course", () => {
+    expect(() =>
+      saveQuizItem(
+        user("u_haddad"),
+        quizItem({ lessonCode: "MATH-08-L003", standard: "8.EE.1" }),
+        "k-item-8",
+      ),
+    ).toThrow(/is not a lesson in Mathematics 6/);
   });
 
   it("removing an item leaves the rest intact", () => {
@@ -291,8 +334,119 @@ describe("video is a reference plus a transcript (CLAUDE.md §12)", () => {
     saveLessonScript(user("u_haddad"), script(), "k-r-1");
     saveQuizItem(user("u_haddad"), quizItem(), "k-r-2");
     addLessonVideo(user("u_haddad"), video, "k-r-3");
+    // A lesson with nothing on its canvas is not finished, whatever else exists.
+    expect(lessonReadiness(DRAFT, LESSON).complete).toBe(false);
 
+    saveLessonBlock(user("u_haddad"), block(), "k-r-4");
     expect(lessonReadiness(DRAFT, LESSON).complete).toBe(true);
+  });
+});
+
+describe("the lesson canvas (CLAUDE.md §7, §12)", () => {
+  beforeEach(() => {
+    clearDatabase();
+    ensureSeeded();
+  });
+
+  it("places blocks in the order they are added, and reorders them", () => {
+    saveLessonBlock(user("u_haddad"), block({ text: "First paragraph." }), "b-1");
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ kind: "heading", text: "Getting the division right" }),
+      "b-2",
+    );
+    expect(authoredLesson(DRAFT, LESSON)?.blocks.map((b) => b.kind)).toEqual([
+      "text",
+      "heading",
+    ]);
+
+    const second = authoredLesson(DRAFT, LESSON)!.blocks[1];
+    moveLessonBlock(
+      user("u_haddad"),
+      {
+        versionId: DRAFT,
+        lessonCode: LESSON,
+        blockId: second.id,
+        direction: "up",
+        reason: "Heading belongs first.",
+      },
+      "b-move",
+    );
+    expect(authoredLesson(DRAFT, LESSON)?.blocks.map((b) => b.kind)).toEqual([
+      "heading",
+      "text",
+    ]);
+  });
+
+  it("NEGATIVE: an image with no alternative text is refused", () => {
+    expect(() =>
+      saveLessonBlock(
+        user("u_haddad"),
+        block({
+          kind: "image",
+          url: "https://media.example.org/rate-table.png",
+          alt: "   ",
+        }),
+        "b-img",
+      ),
+    ).toThrow(/alternative text/);
+    expect(authoredLesson(DRAFT, LESSON)).toBeUndefined();
+  });
+
+  it("NEGATIVE: a video block cannot reference a video the lesson does not have", () => {
+    expect(() =>
+      saveLessonBlock(
+        user("u_haddad"),
+        block({ kind: "video", videoId: "av_nope" }),
+        "b-vid",
+      ),
+    ).toThrow(/Attach the video to this lesson first/);
+  });
+
+  it("keeps a table rectangular against its own headings", () => {
+    const saved = saveLessonBlock(
+      user("u_haddad"),
+      block({
+        kind: "table",
+        caption: "Same numbers, two questions",
+        headers: ["Division", "Unit rate"],
+        rows: [["3 ÷ 2", "1.5 cups per batch", "extra cell that has no column"]],
+      }),
+      "b-table",
+    );
+    expect(saved.kind).toBe("table");
+    if (saved.kind === "table") {
+      expect(saved.rows[0]).toHaveLength(2);
+    }
+  });
+
+  it("NEGATIVE: a reader without the authorization cannot touch the canvas", () => {
+    expect(() =>
+      saveLessonBlock(user("u_okonjo"), block(), "b-deny"),
+    ).toThrow(/separate authorization you do not hold/);
+  });
+
+  it("removing a block leaves the rest in order", () => {
+    saveLessonBlock(user("u_haddad"), block({ text: "One." }), "b-a");
+    saveLessonBlock(user("u_haddad"), block({ text: "Two." }), "b-b");
+    saveLessonBlock(user("u_haddad"), block({ text: "Three." }), "b-c");
+    const middle = authoredLesson(DRAFT, LESSON)!.blocks[1];
+    removeLessonBlock(
+      user("u_haddad"),
+      {
+        versionId: DRAFT,
+        lessonCode: LESSON,
+        blockId: middle.id,
+        reason: "Said the same thing twice.",
+      },
+      "b-remove",
+    );
+    const remaining = authoredLesson(DRAFT, LESSON)!.blocks;
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map((b) => (b.kind === "text" ? b.text : ""))).toEqual([
+      "One.",
+      "Three.",
+    ]);
   });
 });
 
@@ -345,6 +499,7 @@ describe("authored content reaches students only through publication (CLAUDE.md 
 
   function authorAndPublish() {
     saveLessonScript(user("u_haddad"), script(), "k-p-1");
+    saveLessonBlock(user("u_haddad"), block(), "k-p-1b");
     saveQuizItem(user("u_haddad"), quizItem(), "k-p-2");
     submitForReview(user("u_haddad"), DRAFT, "Ready.", "k-p-3");
     approveVersion(user("u_haddad"), DRAFT, "Approved by committee.", "k-p-4");

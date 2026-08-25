@@ -62,7 +62,7 @@ describe("seeded store", () => {
     const queue = actionQueue(teacher);
     expect(queue.length).toBeGreaterThan(0);
     for (const item of queue) {
-      expect(["Mathematics 6", "Mathematics 8", "Integrated Math 1", "Integrated Math 2"]).toContain(
+      expect(["Mathematics 6", "Mathematics 7", "Mathematics 8", "Math 1", "Math 2", "Math 3"]).toContain(
         item.courseTitle,
       );
     }

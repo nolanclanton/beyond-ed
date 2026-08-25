@@ -3,9 +3,10 @@
  *
  * Only a holder of the `curriculum_author` authorization moves a version
  * forward — checked independently of role, so an org admin without it cannot
- * publish. Publication is GATED on day-budget validation: a course that does
- * not validate 135 + 40 = 175 cannot be published, and the failure message
- * names the over-allocation.
+ * publish. Publication is GATED twice: on day-budget validation, so a course
+ * that does not validate 135 + 40 = 175 cannot be published, and on standards
+ * coverage, so a course cannot be published with an assigned standard no lesson
+ * claims. Each failure message names what is wrong rather than hiding it.
  *
  * Publishing a new version does NOT retroactively change a running section: a
  * roster section keeps the `courseVersionId` it was created with, and this
@@ -19,6 +20,7 @@ import type { CourseVersion, User } from "@/lib/db/types";
 
 import { getCourse } from "./catalog";
 import { validateCourseBudget, type BudgetReport } from "./budget";
+import { coverageReport, type CoverageReport } from "./standards";
 import { transitionCurriculum, type CurriculumStatus } from "./publication";
 
 export class CurriculumError extends Error {
@@ -45,6 +47,7 @@ export function sectionsOnVersion(versionId: string): number {
 export function publicationGate(versionId: string): {
   version: CourseVersion;
   report: BudgetReport;
+  coverage: CoverageReport;
   eligible: boolean;
   blockers: string[];
 } {
@@ -54,6 +57,7 @@ export function publicationGate(versionId: string): {
   if (!course) throw new CurriculumError("That course is not in the catalog.");
 
   const report = validateCourseBudget(course);
+  const coverage = coverageReport(course);
   const blockers: string[] = [];
   if (version.status !== "approved") {
     blockers.push(
@@ -64,7 +68,21 @@ export function publicationGate(versionId: string): {
     if (f.severity === "error") blockers.push(f.message);
   }
 
-  return { version, report, eligible: blockers.length === 0, blockers };
+  // Standards coverage is the second publication gate. A course that leaves an
+  // assigned standard unscheduled has a hole in it, and the hole is invisible
+  // once it is published — nobody notices a standard nobody was taught.
+  if (coverage.gaps.length > 0) {
+    blockers.push(
+      `${coverage.gaps.length} assigned ${coverage.gaps.length === 1 ? "standard is" : "standards are"} not claimed by any lesson: ${coverage.gaps.slice(0, 6).join(", ")}${coverage.gaps.length > 6 ? ", …" : ""}.`,
+    );
+  }
+  if (coverage.orphanLessons.length > 0) {
+    blockers.push(
+      `${coverage.orphanLessons.length} lessons claim a standard this course is not responsible for, starting with ${coverage.orphanLessons[0]}.`,
+    );
+  }
+
+  return { version, report, coverage, eligible: blockers.length === 0, blockers };
 }
 
 function move(

@@ -65,7 +65,7 @@ export function asLessonContent(lesson: AuthoredLesson): LessonContent {
     relevance: lesson.relevance,
     goal: lesson.goal,
     successCriteria: lesson.successCriteria,
-    instruction: lesson.instruction,
+    instruction: lesson.blocks,
     vocabulary: lesson.vocabulary,
     workedModel: lesson.workedModel,
     guidedPractice: lesson.guidedPractice,
@@ -76,7 +76,7 @@ export function asLessonContent(lesson: AuthoredLesson): LessonContent {
 
 /** True when there is enough script for a student to have something to read. */
 function hasReadableScript(lesson: AuthoredLesson): boolean {
-  return lesson.goal.trim().length > 0 || lesson.instruction.length > 0;
+  return lesson.goal.trim().length > 0 || lesson.blocks.length > 0;
 }
 
 export function resolveLessonContent(

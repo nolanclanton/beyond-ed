@@ -157,9 +157,7 @@ export default async function Student360Page({
                   const done = states.filter((s) => s.status === "completed");
                   const lessons = course ? courseLessons(course) : [];
                   const doneCodes = new Set(done.map((s) => s.lessonCode));
-                  const days = lessons
-                    .filter((l) => doneCodes.has(l.code))
-                    .reduce((n, l) => n + l.days, 0);
+                  const days = lessons.filter((l) => doneCodes.has(l.code)).length;
                   return (
                     <li key={e.id} className="px-5 py-4">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -218,9 +216,9 @@ export default async function Student360Page({
                                 <th scope="row" className="px-5 py-2 text-left font-mono text-xs text-ink">
                                   {l.code}
                                 </th>
-                                <td className="px-5 py-2 text-xs text-ink-muted">{u.name}</td>
+                                <td className="px-5 py-2 text-xs text-ink-muted">{u.title}</td>
                                 <td className="px-5 py-2 font-mono text-xs text-ink-muted">
-                                  {l.standards}
+                                  {l.primaryStandard}
                                 </td>
                                 <td className="px-5 py-2">
                                   {presentation ? (

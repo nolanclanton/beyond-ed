@@ -58,9 +58,7 @@ export function courseMetrics(enrollment: Enrollment): CourseMetrics {
     lessonsComplete: completeCodes.size,
     lessonsReached: reached.length,
     lessonsTotal: lessons.length,
-    pathwayDaysComplete: lessons
-      .filter((l) => completeCodes.has(l.code))
-      .reduce((n, l) => n + l.days, 0),
+    pathwayDaysComplete: lessons.filter((l) => completeCodes.has(l.code)).length,
     pathwayDaysTotal: course?.pathwayDays ?? 135,
     performancePercent: grade.percent,
     letter: grade.letter,
@@ -98,10 +96,10 @@ export function plannedLessonIndex(sectionId: string): number {
   // one that day falls inside.
   const plannedDay =
     (section.cycle - 1) * 13.5 + section.dayInCycle;
-  let elapsed = 0;
+  // Every lesson is one course day, so the planned lesson is the one whose
+  // day number the section has reached.
   for (let i = 0; i < lessons.length; i++) {
-    elapsed += lessons[i].days;
-    if (elapsed >= plannedDay) return i;
+    if (lessons[i].day >= plannedDay) return i;
   }
   return Math.max(0, lessons.length - 1);
 }

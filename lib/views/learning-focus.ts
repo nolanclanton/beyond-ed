@@ -8,16 +8,13 @@
  * compliance paperwork (CLAUDE.md §13 — every student view answers what am I
  * doing, why, and what must I show next).
  *
- * Nothing here invents a description. A standard's own text is curriculum data
- * this build does not have, so instead each code resolves to the LESSON that
- * claims it as primary coverage, and that lesson's title and description come
- * from the alignment matrix (CLAUDE.md §14). Where a lesson also has an
+ * Nothing here invents a description. Each code resolves to the LESSON that
+ * claims it as primary coverage, and that lesson's title and learning objective
+ * come from the curriculum workbook (CLAUDE.md §14). Where a lesson also has an
  * authored goal, that is preferred, because it is already written to a student.
  */
 import {
   COURSES,
-  instructionalSection,
-  lessonTopic,
   primaryStandards,
   standardCode,
   type CatalogLesson,
@@ -55,12 +52,15 @@ function build(course: (typeof COURSES)[number], lesson: CatalogLesson, unitInde
   const index = unit.lessons.findIndex((l) => l.code === lesson.code) + 1;
   const authored = lessonContent(lesson.code);
   return {
-    title: lessonTopic(lesson),
-    description: authored ? authored.goal : `${instructionalSection(lesson)}.`,
+    title: lesson.title,
+    // The unit's essential question, not the lesson's learning objective: the
+    // objective is written to staff ("Students will…"), the essential question
+    // is written to the reader, and it is the "why" a student needs here.
+    description: authored ? authored.goal : unit.essentialQuestion,
     courseTitle: course.title,
     lessonCode: lesson.code,
     position: `Lesson ${index} of ${unit.lessons.length}`,
-    unitName: unit.name,
+    unitName: unit.title,
   } satisfies LearningFocus;
 }
 

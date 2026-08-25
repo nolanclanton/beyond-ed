@@ -1,7 +1,12 @@
 # ADR 0004 — The curriculum catalog is generated from the blueprint
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0011](0011-curriculum-architecture-workbook.md)
 **Date:** 2026-08-21
+
+> The principle below still holds — the catalog is generated, never authored in
+> code — but its source changed. The blueprint appendices gave 30 courses of
+> multi-day identified lessons; the curriculum architecture workbook gives the
+> full 38-course, 5,130-lesson spine, and is now what `pnpm catalog` reads.
 
 ## Context
 

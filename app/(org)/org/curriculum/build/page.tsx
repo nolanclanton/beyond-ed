@@ -11,7 +11,6 @@ import {
 } from "@/lib/curriculum/lesson-authoring";
 import { db } from "@/lib/db/store";
 import {
-  Banner,
   Card,
   CardHeader,
   Empty,
@@ -58,42 +57,18 @@ export default async function StudioHomePage() {
 
   return (
     <div className="py-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Lesson studio</h1>
-        <p className="mt-2 max-w-3xl text-base text-ink-muted">
-          Write the script a student reads, attach the video that carries it, and
-          build the questions that produce evidence — on a draft version of a
-          course the catalog already plans.
-        </p>
-      </header>
-
-      <div className="mt-5 flex flex-col gap-3">
-        {canAuthor ? (
-          <Banner title="You hold the curriculum-author authorization." tone="info">
-            Content is editable while a version is a draft. Submitting it for
-            review freezes it so reviewers read a fixed thing, and publishing puts
-            it in front of every section created on that version.
-          </Banner>
-        ) : (
-          <Banner title="You can read lessons but not write them." tone="notice">
-            Curriculum authoring is a separate authorization from administrative
-            access. Your role does not carry it, so no editing control is shown —
-            the content is still fully readable.
-          </Banner>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-ink">Lesson studio</h1>
+          <p className="mt-2 max-w-3xl text-base text-ink-muted">
+            Design the lesson a student reads, attach the media that carries it, and
+            build the questions that produce evidence.
+          </p>
+        </div>
+        {canAuthor ? null : (
+          <StatusChip label="Read-only for your role" tone="neutral" />
         )}
-
-        <Banner title="A published lesson never changes under a running class." tone="neutral">
-          A roster section keeps the course version it was created with. Editing
-          a lesson means opening the next version — which is what versioning is
-          for, and what keeps a historical result reproducible.
-        </Banner>
-
-        <Banner title="Lessons are built onto the course plan, not beside it." tone="neutral">
-          Every lesson code, its day range, and its primary standards come from
-          the course plan, which already validates 135 + 40 = 175. Authoring
-          fills a lesson in; it cannot spend days the plan has not allocated.
-        </Banner>
-      </div>
+      </header>
 
       <section aria-labelledby="drafts" className="mt-9">
         <SectionHeading
@@ -138,12 +113,9 @@ export default async function StudioHomePage() {
                           label: "Lessons ready for students",
                           value: `${summary.lessonsComplete}`,
                         },
+                        { label: "Canvas blocks", value: `${summary.blocks}` },
                         { label: "Videos attached", value: `${summary.videos}` },
                         { label: "Quiz items written", value: `${summary.items}` },
-                        {
-                          label: "Reaches students",
-                          value: "When this version is published",
-                        },
                       ]}
                     />
                     <div className="mt-5">
@@ -227,7 +199,7 @@ export default async function StudioHomePage() {
           href="/org/curriculum"
           className={`font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
         >
-          curriculum governance
+          versions
         </Link>
         .
       </p>

@@ -70,8 +70,8 @@ export const PORTALS: readonly Portal[] = [
     eyebrow: "Curriculum experience",
     name: "Curriculum Portal",
     summary:
-      "Move a course version through review, approval, and publication — gated on the 135 + 40 = 175 day contract. A separate authorization from administration.",
-    dataNote: "Opens with a draft and an in-review version ready to move.",
+      "Design the lesson a student reads — text, callouts, tables, images, and video — onto a course plan of 38 courses and 5,130 lessons, then move the version through review and publication.",
+    dataNote: "Opens on the catalog, with a Mathematics 6 draft ready to build in.",
     defaultUserId: "u_haddad",
     cta: "Preview Curriculum Portal",
   },

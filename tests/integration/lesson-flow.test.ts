@@ -18,7 +18,7 @@ import { RULE_VERSIONS, SPIRAL_REVIEW_MAX_ITEMS } from "@/lib/rules/versions";
 import type { User } from "@/lib/db/types";
 
 const ENROLLMENT = "enr_amara_Mathematics_6";
-const LESSON = "M6-U1-L2";
+const LESSON = "MATH-06-L035";
 
 function amara(): User {
   const u = db().users.find((x) => x.id === "u_amara");
@@ -150,7 +150,7 @@ describe("running a lesson end to end", () => {
   it("refuses to score a lesson with no authored items", () => {
     // M6-U1-L1 is complete and has no exit-ticket bank.
     expect(() =>
-      submitExitTicket(amara(), ENROLLMENT, "M6-U1-L1", [], 1, "k-none"),
+      submitExitTicket(amara(), ENROLLMENT, "MATH-06-L020", [], 1, "k-none"),
     ).toThrow(/have not been authored/);
   });
 
@@ -161,7 +161,7 @@ describe("running a lesson end to end", () => {
     const submit = events.find((e) => e.action === "assessment.submit");
     expect(submit).toBeDefined();
     expect(submit?.actorUserId).toBe("u_amara");
-    expect(submit?.reason).toContain("Exit Ticket submitted for M6-U1-L2");
+    expect(submit?.reason).toContain("Exit Ticket submitted for MATH-06-L035");
     expect(JSON.parse(submit?.after ?? "{}")).toMatchObject({
       percent: 100,
       ruleVersion: RULE_VERSIONS.exitBands,
@@ -182,11 +182,11 @@ describe("running a lesson end to end", () => {
   it("unlocks the next lesson only when the current one completes", () => {
     startLesson(amara(), ENROLLMENT, LESSON, "k-start");
     submitExitTicket(amara(), ENROLLMENT, LESSON, answers(4), 6, "k-exit");
-    expect(lessonState(ENROLLMENT, "M6-U1-L3")?.status).toBe("locked");
+    expect(lessonState(ENROLLMENT, "MATH-06-L036")?.status).toBe("locked");
 
     completeLesson(amara(), ENROLLMENT, LESSON, "k-complete");
     expect(lessonState(ENROLLMENT, LESSON)?.status).toBe("completed");
-    expect(lessonState(ENROLLMENT, "M6-U1-L3")?.status).toBe("available");
+    expect(lessonState(ENROLLMENT, "MATH-06-L036")?.status).toBe("available");
   });
 
   it("keeps the grade and the readiness estimate in separate calculations", () => {

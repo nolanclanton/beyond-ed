@@ -4,15 +4,18 @@
  * ============================================================================
  *
  * The blueprint specifies the ten-stage lesson structure and what each stage is
- * for. It does not supply instructional text. CLAUDE.md §14 forbids inventing
- * curriculum, so this file is marked as demonstration content and every surface
- * that renders it says so.
+ * for, and the curriculum workbook specifies every lesson's place, standard,
+ * and objective. Neither supplies instructional text. CLAUDE.md §14 forbids
+ * inventing curriculum, so this file is marked as demonstration content and
+ * every surface that renders it says so.
  *
  * Only the six lessons with an authored item bank have content here. Every
- * other lesson renders its curriculum record — sequence, standards, assessment
- * evidence, linked intervention — and states plainly that its instruction has
- * not been authored.
+ * other lesson renders its curriculum record — unit, essential question,
+ * standard, objective, prerequisites — and states plainly that its instruction
+ * has not been written yet. That is what the lesson studio is for.
  */
+
+import type { LessonBlock } from "./types";
 
 export type LessonContent = {
   /** Stage 3 — introduction and relevance. */
@@ -20,8 +23,8 @@ export type LessonContent = {
   /** Stage 4 — goal and success criteria. */
   goal: string;
   successCriteria: string[];
-  /** Stage 5 — accessible instruction. */
-  instruction: string[];
+  /** Stage 5 — accessible instruction, as the composed lesson canvas. */
+  instruction: LessonBlock[];
   vocabulary: { term: string; meaning: string }[];
   /** Stage 6 — worked model, exposing the reasoning rather than the answer. */
   workedModel: { step: string; reasoning: string }[];
@@ -33,8 +36,13 @@ export type LessonContent = {
   notesOutline: string[];
 };
 
+/** Plain paragraphs as canvas blocks — what most demo instruction is. */
+function paragraphs(...texts: string[]): LessonBlock[] {
+  return texts.map((text, i) => ({ id: `p${i + 1}`, kind: "text", text }));
+}
+
 const CONTENT: Record<string, LessonContent> = {
-  "M6-U1-L2": {
+  "MATH-06-L035": {
     relevance:
       "Two stores sell the same pens at different pack sizes and prices. Neither price tag answers the question you actually have, which is what one pen costs. A unit rate is the move that makes different-sized offers comparable.",
     goal: "Find and use a unit rate to compare two quantities measured in different units.",
@@ -45,9 +53,38 @@ const CONTENT: Record<string, LessonContent> = {
       "I can tell a multiplicative comparison from an additive one.",
     ],
     instruction: [
-      "A ratio compares two quantities. A rate is a ratio where the two quantities have different units — miles and gallons, dollars and pens, cups and batches.",
-      "A unit rate is a rate written 'per one' of the second quantity. To get it, divide the first quantity by the second. The unit that follows the word 'per' is always the one you divide by.",
-      "Getting the division backwards does not give a wrong number — it gives the answer to a different question. 3 cups ÷ 2 batches is cups per batch. 2 ÷ 3 is batches per cup. Both are real; only one answers what was asked.",
+      {
+        id: "p1",
+        kind: "text",
+        text: "A ratio compares two quantities. A rate is a ratio where the two quantities have different units — miles and gallons, dollars and pens, cups and batches.",
+      },
+      {
+        id: "p2",
+        kind: "text",
+        text: "A unit rate is a rate written 'per one' of the second quantity. To get it, divide the first quantity by the second. The unit that follows the word 'per' is always the one you divide by.",
+      },
+      {
+        id: "c1",
+        kind: "callout",
+        tone: "memory",
+        title: "The 'per' rule",
+        text: "The unit that comes after the word 'per' is always the one you divide by. This one sentence is what the whole unit rests on, and it comes back in percent, in speed, and in unit conversion.",
+      },
+      {
+        id: "t1",
+        kind: "table",
+        caption: "Same numbers, two different questions",
+        headers: ["Situation", "Division", "Unit rate", "The question it answers"],
+        rows: [
+          ["3 cups, 2 batches", "3 ÷ 2", "1.5 cups per batch", "How much for one batch?"],
+          ["3 cups, 2 batches", "2 ÷ 3", "0.67 batches per cup", "How many batches from one cup?"],
+        ],
+      },
+      {
+        id: "p3",
+        kind: "text",
+        text: "Getting the division backwards does not give a wrong number — it gives the answer to a different question. Both rows above are real. Only one answers what was asked.",
+      },
     ],
     vocabulary: [
       { term: "Rate", meaning: "A comparison of two quantities with different units." },
@@ -100,7 +137,7 @@ const CONTENT: Record<string, LessonContent> = {
     ],
   },
 
-  "E6-U1-L2": {
+  "ELA-06-L021": {
     relevance:
       "Two readers can finish the same story and disagree about what it was about. The disagreement is usually about the difference between a topic and a theme — and between naming an idea and showing where the text builds it.",
     goal: "Determine a theme or central idea and show how it develops over the course of the text.",
@@ -110,11 +147,11 @@ const CONTENT: Record<string, LessonContent> = {
       "I can write an objective summary with no opinion in it.",
       "I can pair a quotation with reasoning that says what it shows.",
     ],
-    instruction: [
+    instruction: paragraphs(
       "A topic is a subject: honesty, courage, belonging. A theme is what the text says about that subject, written as a full sentence someone could agree or disagree with.",
       "Development is the part people skip. A theme that appears once is a moment; a theme that is developed changes, deepens, or costs the character something across the text.",
-      "An objective summary reports the main events and the central idea without telling the reader what to feel about them.",
-    ],
+      "An objective summary reports the main events and the central idea without telling the reader what to feel about them."
+    ),
     vocabulary: [
       { term: "Topic", meaning: "The subject a text is about, usually one word." },
       { term: "Theme", meaning: "A claim about the topic that the whole text supports." },
@@ -171,7 +208,7 @@ const CONTENT: Record<string, LessonContent> = {
     ],
   },
 
-  "S6-U1-L2": {
+  "SCI-06-L078": {
     relevance:
       "Two cooler designs both 'work'. One holds ice longer; the other costs a third as much. Deciding between them is not a matter of opinion — it is a systematic comparison against criteria and constraints that were agreed before the test.",
     goal: "Evaluate competing design solutions systematically against criteria and constraints.",
@@ -182,9 +219,39 @@ const CONTENT: Record<string, LessonContent> = {
       "I can replace a judgment word with a measured value and a unit.",
     ],
     instruction: [
-      "A criterion says what success looks like. A constraint says what the solution must stay inside — cost, size, time, materials, safety.",
-      "A systematic evaluation checks each design against each criterion and each constraint, in a table, with measurements. A design that wins on one criterion and fails a constraint has not met the criteria.",
-      "A comparison is only fair if everything except the design being tested is held constant.",
+      {
+        id: "p1",
+        kind: "text",
+        text: "A criterion says what success looks like. A constraint says what the solution must stay inside — cost, size, time, materials, safety.",
+      },
+      {
+        id: "d1",
+        kind: "definition",
+        term: "Fair test",
+        meaning: "A comparison in which only the thing being tested changes. Everything else is held constant, so any difference in the result has one available explanation.",
+      },
+      {
+        id: "p2",
+        kind: "text",
+        text: "A systematic evaluation checks each design against each criterion and each constraint, in a table, with measurements. A design that wins on one criterion and fails a constraint has not met the criteria.",
+      },
+      {
+        id: "t1",
+        kind: "table",
+        caption: "Criteria: holds ice at least 5 hours. Constraint: costs under $20.",
+        headers: ["Design", "Hours of ice", "Cost", "Meets both?"],
+        rows: [
+          ["A", "6", "$12", "Yes"],
+          ["B", "9", "$36", "No — fails the cost constraint"],
+        ],
+      },
+      {
+        id: "c1",
+        kind: "callout",
+        tone: "important",
+        text: "B is the better cooler and still not the answer to the question that was asked. A constraint is not a tiebreaker; it is a boundary.",
+        title: "Better is not the same as acceptable",
+      },
     ],
     vocabulary: [
       { term: "Criterion", meaning: "A stated measure of success." },
@@ -233,7 +300,7 @@ const CONTENT: Record<string, LessonContent> = {
     ],
   },
 
-  "H6-U1-L2": {
+  "HSS-06-L001": {
     relevance:
       "'Farming started because people invented tools' is the kind of sentence that sounds like history and explains nothing. Real historical explanation separates the conditions that made a change possible from the event that set it off.",
     goal: "Explain a historical change with layered causation and evidence, in correct sequence.",
@@ -243,11 +310,11 @@ const CONTENT: Record<string, LessonContent> = {
       "I can support a claim with physical or documentary evidence.",
       "I can say why one cause is not enough.",
     ],
-    instruction: [
+    instruction: paragraphs(
       "Chronology is not just order — it is dependency. 'After surplus grain could be stored, some people stopped farming full time' says which came first AND why the second needed the first.",
       "Conditions make a change possible. Triggers set it off. Causes connect them. Collapsing all three into one sentence is what makes an explanation thin.",
-      "Evidence for early history is mostly physical: what was found, where, and how much of it. Weight and repetition matter — storage pits and rebuilt foundations say 'permanent' in a way one arrowhead does not.",
-    ],
+      "Evidence for early history is mostly physical: what was found, where, and how much of it. Weight and repetition matter — storage pits and rebuilt foundations say 'permanent' in a way one arrowhead does not."
+    ),
     vocabulary: [
       { term: "Condition", meaning: "A long-running situation that makes an event possible." },
       { term: "Trigger", meaning: "The immediate event that sets a change in motion." },
@@ -300,7 +367,7 @@ const CONTENT: Record<string, LessonContent> = {
     ],
   },
 
-  "IM1-U2-L2": {
+  "MATH-1-L046": {
     relevance:
       "A phone plan is $20 plus $0.10 per gigabyte. Written as C(g) = 20 + 0.1g, the whole plan fits in one line — and reading that line correctly is the difference between a $23.50 bill and a $55 surprise.",
     goal: "Use function notation, and use the definition of a function to decide whether a relation is one.",
@@ -310,11 +377,11 @@ const CONTENT: Record<string, LessonContent> = {
       "I can identify the domain and range in a real context.",
       "I can evaluate a function in context and check the result against the situation.",
     ],
-    instruction: [
+    instruction: paragraphs(
       "A function assigns exactly ONE output to each input. Repeated outputs are fine — {(1,4), (2,4)} is a function. Repeated inputs with different outputs are not — {(1,4), (1,5)} is not.",
       "f(x) is a name for an output, not a product. The f is the function's name, the x is the input, and f(x) is what comes out.",
-      "In context, the domain is the set of inputs — the thing that causes — and the range is the set of outputs.",
-    ],
+      "In context, the domain is the set of inputs — the thing that causes — and the range is the set of outputs."
+    ),
     vocabulary: [
       { term: "Function", meaning: "A rule assigning exactly one output to each input." },
       { term: "Domain", meaning: "The set of allowed inputs." },
@@ -362,7 +429,7 @@ const CONTENT: Record<string, LessonContent> = {
     ],
   },
 
-  "E9-U1-L2": {
+  "ELA-09-L021": {
     relevance:
       "The most common note on a first literary analysis is 'quotation dropped'. The quotation is there; the sentence that says what it shows is not. That sentence is where the analysis actually lives.",
     goal: "Determine a theme, analyse how it emerges and is shaped, and integrate evidence with commentary.",
@@ -372,11 +439,11 @@ const CONTENT: Record<string, LessonContent> = {
       "I can embed a quotation inside my own sentence.",
       "I can follow every quotation with reasoning that names what it shows.",
     ],
-    instruction: [
+    instruction: paragraphs(
       "'Emerges and is shaped' is a development claim. It asks how the idea got there and what pressed on it — not where it is stated.",
       "An integrated quotation sits inside your sentence, with your own words carrying the grammar. A dropped quotation stands alone as its own sentence and leaves the reader to do your work.",
-      "Commentary is the sentence after the quotation. It names what the detail shows about the claim. Without it, evidence is decoration.",
-    ],
+      "Commentary is the sentence after the quotation. It names what the detail shows about the claim. Without it, evidence is decoration."
+    ),
     vocabulary: [
       { term: "Theme", meaning: "An arguable claim about human experience the text supports." },
       { term: "Integrated quotation", meaning: "A quotation embedded inside your own sentence." },

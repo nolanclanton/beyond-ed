@@ -1,10 +1,10 @@
 /**
  * The unit-by-unit view of a course pathway.
  *
- * The blueprint's unit budgets are in pathway days, so progress through a unit
- * is measured in days completed rather than lessons counted — a 7-day lesson is
- * not the same step as a 1-day lesson, and counting lessons would overstate a
- * student who has finished three short ones.
+ * Every lesson in the catalog is one 30-minute course day, so a unit's fifteen
+ * lessons are its fifteen pathway days and progress reads the same either way.
+ * Both counts are still reported, because a unit budget is stated in days and a
+ * student's own page is stated in lessons.
  */
 import {
   courseLessons,
@@ -43,13 +43,11 @@ export function unitProgress(enrollment: Enrollment): UnitProgress[] {
     const month = monthForUnitStart(daysBefore);
     daysBefore += unit.pathwayDays;
 
-    const daysComplete = unit.lessons
-      .filter((l) => states.get(l.code) === "completed")
-      .reduce((n, l) => n + l.days, 0);
     const lessonsComplete = unit.lessons.filter(
       (l) => states.get(l.code) === "completed",
     ).length;
-    const daysTotal = unit.lessons.reduce((n, l) => n + l.days, 0) || unit.pathwayDays;
+    const daysComplete = lessonsComplete;
+    const daysTotal = unit.lessons.length || unit.pathwayDays;
 
     const touched = unit.lessons.some((l) => {
       const status = states.get(l.code);
@@ -100,7 +98,5 @@ export function pathwayDaysComplete(enrollment: Enrollment, course: CatalogCours
       .filter((s) => s.status === "completed")
       .map((s) => s.lessonCode),
   );
-  return courseLessons(course)
-    .filter((l) => done.has(l.code))
-    .reduce((n, l) => n + l.days, 0);
+  return courseLessons(course).filter((l) => done.has(l.code)).length;
 }

@@ -209,7 +209,13 @@ export function transact<T>(fn: () => T): T {
     authoredLessons: d.authoredLessons.map((r) => ({
       ...r,
       successCriteria: [...r.successCriteria],
-      instruction: [...r.instruction],
+      blocks: r.blocks.map((b) =>
+        b.kind === "list"
+          ? { ...b, items: [...b.items] }
+          : b.kind === "table"
+            ? { ...b, headers: [...b.headers], rows: b.rows.map((row) => [...row]) }
+            : { ...b },
+      ),
       vocabulary: r.vocabulary.map((v) => ({ ...v })),
       workedModel: r.workedModel.map((w) => ({ ...w })),
       guidedPractice: r.guidedPractice.map((g) => ({ ...g })),

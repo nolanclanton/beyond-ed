@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import {
   assessmentDescription,
   getCourse,
-  instructionalSection,
+  lessonType,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
 import { db } from "@/lib/db/store";
@@ -70,8 +70,8 @@ export default async function CoursePage({
         {course.units.map((unit) => (
           <Card key={unit.id}>
             <CardHeader
-              title={`Unit ${unit.id}. ${unit.name}`}
-              hint={`${unit.lessons.length} lessons · about ${unit.pathwayDays} class days`}
+              title={`Unit ${unit.order}. ${unit.title}`}
+              hint={unit.essentialQuestion}
             />
             <ul className="divide-y divide-line">
               {unit.lessons.map((lesson, index) => {
@@ -101,25 +101,20 @@ export default async function CoursePage({
                             />
                           ) : null}
                           <span className="text-xs text-ink-muted">
-                            Lesson {index + 1} of {unit.lessons.length} &middot; about{" "}
-                            {lesson.days} class {lesson.days === 1 ? "day" : "days"}
+                            Lesson {index + 1} of {unit.lessons.length} &middot;{" "}
+                            {lessonType(lesson).toLowerCase()}
                           </span>
                         </div>
-                        {/*
-                          Every lesson in a unit shares the unit's topic, so the
-                          topic is a poor title here — it would repeat three
-                          times under a heading that already says it. What
-                          distinguishes them is the part of the unit they cover.
-                        */}
                         <p className="mt-1.5 text-base font-semibold text-ink">
-                          {instructionalSection(lesson)}
+                          {lesson.title}
                         </p>
                         {/*
                           Where no goal has been written, the focus description
-                          falls back to the same section phrase used as the
-                          title. Showing it twice reads as a rendering bug.
+                          falls back to the unit's essential question, which the
+                          card header above already carries. Showing it twice
+                          reads as a rendering bug.
                         */}
-                        {description && description !== `${instructionalSection(lesson)}.` ? (
+                        {description && description !== unit.essentialQuestion ? (
                           <p className="mt-0.5 text-sm text-ink-muted">{description}</p>
                         ) : null}
                         <p className="mt-1.5 text-xs text-ink-muted">

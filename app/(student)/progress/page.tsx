@@ -176,7 +176,7 @@ export default async function ProgressPage() {
                   {units.map((u) => (
                     <UnitProgressRow
                       key={u.unit.id}
-                      label={`Unit ${u.unit.id}. ${u.unit.name}`}
+                      label={`Unit ${u.unit.order}. ${u.unit.title}`}
                       detail={`${u.month} · ${u.daysTotal} days · ${u.lessonsComplete} of ${u.lessonsTotal} lessons`}
                       percent={u.percent}
                       state={u.state}

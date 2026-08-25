@@ -1,134 +1,201 @@
 /**
  * Typed access to the curriculum catalog.
  *
- * `data/catalog.json` is GENERATED from `docs/blueprint.md` by
- * `scripts/build-catalog.mjs`. Every course title, unit name, day budget,
- * lesson code, standard code, assessment id, and intervention id in it is read
- * out of the blueprint appendices. Nothing in this file authors curriculum
- * (CLAUDE.md §14 — never fabricate curriculum data). To change the catalog,
- * change the blueprint and regenerate.
+ * `data/catalog.json` is GENERATED from the curriculum architecture workbook at
+ * `docs/curriculum/curriculum-architecture.xlsx` by `scripts/build-catalog.mjs`.
+ * Every course, unit, lesson, title, objective, and standard code in it is read
+ * out of a cell. Nothing in this file authors curriculum (CLAUDE.md §14 — never
+ * fabricate curriculum data). To change the catalog, change the workbook and
+ * regenerate.
+ *
+ * The shape the workbook defines, and that everything here relies on:
+ *
+ *   38 courses × 9 units × 15 lessons = 5,130 pathway lessons
+ *   135 pathway days + 40 intervention-capacity days = 175 per course
+ *
+ * Every unit runs the same fifteen-lesson arc — launch, vocabulary, explicit
+ * instruction, concept development, and on to the performance task — so a
+ * lesson's TYPE and the EVIDENCE it produces are a function of its position in
+ * its unit rather than facts stored on the lesson. `lessonStage` resolves them.
  */
 import rawCatalog from "./data/catalog.json";
 
-export type Subject = "Mathematics" | "English" | "Science" | "Social science";
+export type Subject =
+  | "Mathematics"
+  | "English Language Arts"
+  | "Science"
+  | "History-Social Science";
+
+/** One phase of the 30-minute lesson shape, e.g. 12 minutes of guided work. */
+export type StructurePhase = { minutes: number; label: string };
+
+/** One position in the fifteen-lesson unit arc. */
+export type LessonStage = {
+  position: number;
+  /** e.g. `Formative checkpoint`. */
+  type: string;
+  /** What the student produces, e.g. `standards-aligned mini-check`. */
+  evidence: string;
+};
 
 export type CatalogLesson = {
-  /** Stable lesson identifier from the alignment matrix, e.g. `M6-U1-L1`. */
+  /** Stable lesson identifier from the workbook, e.g. `MATH-06-L001`. */
   code: string;
-  /** Course-day range the lesson spans, e.g. `4-8`. */
-  dayRange: string;
-  days: number;
-  sequence: string;
-  /** Primary standards assignment — the coverage-control record. */
-  standards: string;
-  assessment: string;
-  /** The intervention lesson linked to this pathway lesson. */
-  intervention: string;
+  /** Course day, 1-135. Unique within a course. */
+  day: number;
+  title: string;
+  objective: string;
+  /** The coverage-control record: one standard per lesson. */
+  primaryStandard: string;
+  supportingStandards: string[];
+  /** Practice or discipline-literacy codes, e.g. `MP.2`, `RH.6-8.1`. */
+  practice: string[];
 };
 
 export type CatalogUnit = {
   id: string;
   order: number;
-  name: string;
+  title: string;
+  essentialQuestion: string;
+  concepts: string[];
   pathwayDays: number;
+  startDay: number;
+  endDay: number;
+  standards: string[];
   lessons: CatalogLesson[];
 };
 
 export type CatalogCourse = {
+  /** Stable course identifier, e.g. `MATH-06`. Never derived from the title. */
+  id: string;
   title: string;
   subject: Subject;
+  /** e.g. `6`, `9-10`, `11-12`. */
+  gradeBand: string;
   order: number;
-  headline: string | null;
+  /** The standards model the course is built against. */
+  standardsModel: string;
   pathwayDays: number;
+  interventionCapacity: number;
   units: CatalogUnit[];
 };
 
-export type StarterIntervention = {
-  lessonId: string;
-  target: string;
-  trigger: string;
-  transfer: string;
-  subjectHeading: string;
-};
-
-export type InterventionFamily = {
-  subject: string;
-  family: string;
-  lessons: number;
-  targets: string;
-};
-
 const catalog = rawCatalog as unknown as {
+  builtAt: string;
+  source: string;
+  contract: {
+    pathwayDays: number;
+    interventionCapacity: number;
+    annualTotal: number;
+    unitsPerCourse: number;
+    lessonsPerUnit: number;
+  };
+  lessonStructure: StructurePhase[];
+  lessonArc: LessonStage[];
+  subjects: Subject[];
   courses: CatalogCourse[];
-  starterInterventions: StarterIntervention[];
-  interventionFamilies: InterventionFamily[];
 };
 
 export const COURSES: readonly CatalogCourse[] = catalog.courses;
-export const STARTER_INTERVENTIONS: readonly StarterIntervention[] =
-  catalog.starterInterventions;
-export const INTERVENTION_FAMILIES: readonly InterventionFamily[] =
-  catalog.interventionFamilies;
+export const SUBJECTS: readonly Subject[] = catalog.subjects;
 
-export const SUBJECTS: readonly Subject[] = [
-  "Mathematics",
-  "English",
-  "Science",
-  "Social science",
-];
+/** The 30-minute lesson shape every pathway lesson runs. */
+export const LESSON_STRUCTURE: readonly StructurePhase[] = catalog.lessonStructure;
 
-/**
- * Lesson code -> the course it belongs to. Built once from the catalog, so a
- * lesson's subject is never inferred from its code prefix.
- */
-const courseByLessonCode = new Map<string, CatalogCourse>();
+/** The fifteen-lesson unit arc, in order. */
+export const LESSON_ARC: readonly LessonStage[] = catalog.lessonArc;
+
+export const CATALOG_SOURCE = { path: catalog.source, builtAt: catalog.builtAt };
+
+/** Short subject labels for dense surfaces. The long names are the standards'. */
+export const SUBJECT_SHORT: Record<Subject, string> = {
+  Mathematics: "Math",
+  "English Language Arts": "English",
+  Science: "Science",
+  "History-Social Science": "Social science",
+};
+
+// ---------------------------------------------------------------------------
+// Indexes, built once
+// ---------------------------------------------------------------------------
+
+type LessonLocation = {
+  course: CatalogCourse;
+  unit: CatalogUnit;
+  lesson: CatalogLesson;
+  /** Index of the lesson within the whole course, 0-134. */
+  index: number;
+};
+
+const byLessonCode = new Map<string, LessonLocation>();
+const byCourseId = new Map<string, CatalogCourse>();
+const byTitle = new Map<string, CatalogCourse>();
+const bySlug = new Map<string, CatalogCourse>();
+const byUnitId = new Map<string, { course: CatalogCourse; unit: CatalogUnit }>();
+
+/** A course's stable slug. Derived from its id, which never changes. */
+export function courseSlug(course: CatalogCourse): string {
+  return course.id.toLowerCase();
+}
+
 for (const course of COURSES) {
+  byCourseId.set(course.id, course);
+  byTitle.set(course.title, course);
+  bySlug.set(courseSlug(course), course);
+  let index = 0;
   for (const unit of course.units) {
+    byUnitId.set(unit.id, { course, unit });
     for (const lesson of unit.lessons) {
-      courseByLessonCode.set(lesson.code, course);
+      byLessonCode.set(lesson.code, { course, unit, lesson, index });
+      index += 1;
     }
   }
 }
 
-export function courseForLesson(lessonCode: string): CatalogCourse | undefined {
-  return courseByLessonCode.get(lessonCode);
-}
-
-/** The subject a lesson belongs to, e.g. `Social science` for `H6-U1-L2`. */
-export function subjectForLesson(lessonCode: string): Subject | undefined {
-  return courseByLessonCode.get(lessonCode)?.subject;
-}
-
-/** A course's stable slug. Derived from its title, which is stable. */
-export function courseSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-const bySlug = new Map(COURSES.map((c) => [courseSlug(c.title), c]));
-const byTitle = new Map(COURSES.map((c) => [c.title, c]));
-
-export function getCourseBySlug(slug: string): CatalogCourse | undefined {
-  return bySlug.get(slug);
-}
+// ---------------------------------------------------------------------------
+// Lookups
+// ---------------------------------------------------------------------------
 
 export function getCourse(title: string): CatalogCourse | undefined {
   return byTitle.get(title);
 }
 
-export function coursesForSubject(subject: Subject): CatalogCourse[] {
-  return COURSES.filter((c) => c.subject === subject).sort(
-    (a, b) => a.order - b.order,
-  );
+export function getCourseById(id: string): CatalogCourse | undefined {
+  return byCourseId.get(id);
 }
 
-export function getUnit(
-  course: CatalogCourse,
-  unitId: string,
-): CatalogUnit | undefined {
+export function getCourseBySlug(slug: string): CatalogCourse | undefined {
+  return bySlug.get(slug.toLowerCase());
+}
+
+export function coursesForSubject(subject: Subject): CatalogCourse[] {
+  return COURSES.filter((c) => c.subject === subject).sort((a, b) => a.order - b.order);
+}
+
+export function getUnit(course: CatalogCourse, unitId: string): CatalogUnit | undefined {
   return course.units.find((u) => u.id === unitId);
+}
+
+/** The course, unit, and unit a lesson belongs to — one lookup, no scanning. */
+export function locateLesson(lessonCode: string): LessonLocation | undefined {
+  return byLessonCode.get(lessonCode);
+}
+
+export function unitById(unitId: string): { course: CatalogCourse; unit: CatalogUnit } | undefined {
+  return byUnitId.get(unitId);
+}
+
+export function courseForLesson(lessonCode: string): CatalogCourse | undefined {
+  return byLessonCode.get(lessonCode)?.course;
+}
+
+/** The subject a lesson belongs to. Never inferred from the code's prefix. */
+export function subjectForLesson(lessonCode: string): Subject | undefined {
+  return byLessonCode.get(lessonCode)?.course.subject;
+}
+
+export function unitForLesson(lessonCode: string): CatalogUnit | undefined {
+  return byLessonCode.get(lessonCode)?.unit;
 }
 
 /** Every lesson in a course, in pathway order. */
@@ -140,11 +207,9 @@ export function findLesson(
   course: CatalogCourse,
   code: string,
 ): { unit: CatalogUnit; lesson: CatalogLesson } | undefined {
-  for (const unit of course.units) {
-    const lesson = unit.lessons.find((l) => l.code === code);
-    if (lesson) return { unit, lesson };
-  }
-  return undefined;
+  const at = byLessonCode.get(code);
+  if (!at || at.course.id !== course.id) return undefined;
+  return { unit: at.unit, lesson: at.lesson };
 }
 
 /** The lesson that follows `code` in the pathway, or undefined at the end. */
@@ -152,88 +217,73 @@ export function nextLesson(
   course: CatalogCourse,
   code: string,
 ): { unit: CatalogUnit; lesson: CatalogLesson } | undefined {
-  const ordered = course.units.flatMap((u) =>
-    u.lessons.map((lesson) => ({ unit: u, lesson })),
-  );
-  const at = ordered.findIndex((x) => x.lesson.code === code);
-  if (at < 0 || at + 1 >= ordered.length) return undefined;
-  return ordered[at + 1];
+  const at = byLessonCode.get(code);
+  if (!at || at.course.id !== course.id) return undefined;
+  const ordered = courseLessons(course);
+  const following = ordered[at.index + 1];
+  if (!following) return undefined;
+  const location = byLessonCode.get(following.code);
+  return location ? { unit: location.unit, lesson: location.lesson } : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Lesson facts derived from the unit arc
+// ---------------------------------------------------------------------------
+
+/** A lesson's position in its unit, 1-15. */
+export function lessonPosition(lesson: CatalogLesson): number {
+  return ((lesson.day - 1) % catalog.contract.lessonsPerUnit) + 1;
+}
+
+/** The arc entry for a lesson: what kind of lesson it is and what it produces. */
+export function lessonStage(lesson: CatalogLesson): LessonStage {
+  return LESSON_ARC[lessonPosition(lesson) - 1];
+}
+
+/** e.g. `Formative checkpoint`. */
+export function lessonType(lesson: CatalogLesson): string {
+  return lessonStage(lesson).type;
+}
+
+/** What the student produces, e.g. `standards-aligned mini-check`. */
+export function lessonEvidence(lesson: CatalogLesson): string {
+  return lessonStage(lesson).evidence;
 }
 
 /**
- * The standard codes a lesson claims as primary coverage, tags included.
- * Lessons with no new standard (launch/diagnostic) return an empty list.
+ * The standard codes a lesson claims as primary coverage.
+ *
+ * The workbook assigns exactly one primary standard per lesson; this returns a
+ * list because coverage control is a set operation everywhere it is read.
  */
 export function primaryStandards(lesson: CatalogLesson): string[] {
-  const text = lesson.standards;
-  if (/no new primary standard/i.test(text)) return [];
-  return text
-    .split(",")
-    .map((s) => s.trim().replace(/\.$/, ""))
-    .filter((s) => s.length > 0 && !/^readiness/i.test(s));
+  return lesson.primaryStandard ? [lesson.primaryStandard] : [];
 }
 
 /**
- * The bare standard code, without its alignment tag.
- * `A-SSE.1.a [*]` -> `A-SSE.1.a`.
+ * The bare standard code. The workbook publishes codes without alignment tags,
+ * so this only trims — it stays because every caller passes user- or
+ * record-sourced text through it.
  */
 export function standardCode(standard: string): string {
-  return standard.replace(/\s*\[[^\]]*\]\s*$/, "").trim();
+  return standard.trim();
 }
 
 /**
- * The alignment tag on a standard, if any. From the appendix legend:
- * `CA` marks a California addition, `*` a starred modeling standard or
- * engineering-integrated performance expectation, `+` advanced mathematics,
- * `LOCAL` a locally authorized extension.
+ * The assessment record id for a lesson, e.g. `A-MATH-06-L001`.
+ *
+ * A system record identifier derived from the lesson id, not a curriculum fact:
+ * the workbook names what evidence a lesson produces, not what to call the row
+ * that stores the result.
  */
-export function standardTag(standard: string): string | null {
-  const m = /\[([^\]]*)\]\s*$/.exec(standard);
-  return m ? m[1] : null;
-}
-
-export const STANDARD_TAG_MEANING: Record<string, string> = {
-  CA: "California addition",
-  "*": "Starred modeling standard or engineering-integrated performance expectation",
-  "+": "Advanced mathematics",
-  LOCAL: "Locally authorized extension",
-};
-
-/** The intervention lesson id linked to a pathway lesson, e.g. `I-M6-U1-L1`. */
-export function interventionId(lesson: CatalogLesson): string {
-  const m = /^([A-Za-z0-9-]+)/.exec(lesson.intervention);
-  return m ? m[1] : lesson.intervention;
-}
-
-/** The plain-language target of a linked intervention lesson. */
-export function interventionTarget(lesson: CatalogLesson): string {
-  const m = /:\s*(.+)$/.exec(lesson.intervention);
-  return m ? m[1].trim() : lesson.intervention;
-}
-
-/** The assessment record id for a lesson, e.g. `A-M6-U1-L1`. */
 export function assessmentId(lesson: CatalogLesson): string {
-  const m = /^([A-Za-z0-9-]+):/.exec(lesson.assessment);
-  return m ? m[1] : lesson.assessment;
+  return `A-${lesson.code}`;
 }
 
+/** The plain-language description of the evidence a lesson produces. */
 export function assessmentDescription(lesson: CatalogLesson): string {
-  const m = /:\s*(.+)$/.exec(lesson.assessment);
-  return m ? m[1].trim() : lesson.assessment;
+  return lessonEvidence(lesson);
 }
 
-/**
- * The instructional section a lesson sits in (blueprint §3, §8).
- * The alignment matrix encodes it in the lesson sequence text after the colon.
- */
-export function instructionalSection(lesson: CatalogLesson): string {
-  const m = /:\s*(.+?)\.?$/.exec(lesson.sequence);
-  const tail = m ? m[1] : lesson.sequence;
-  return tail.charAt(0).toUpperCase() + tail.slice(1);
-}
-
-/** The unit narrative a lesson belongs to, without the section suffix. */
-export function lessonTopic(lesson: CatalogLesson): string {
-  const m = /^(.+?):/.exec(lesson.sequence);
-  return m ? m[1].trim() : lesson.sequence;
-}
+/** Total minutes in the lesson shape. 30, by construction. */
+export const LESSON_MINUTES = LESSON_STRUCTURE.reduce((n, p) => n + p.minutes, 0);

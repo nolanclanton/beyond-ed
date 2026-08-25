@@ -46,7 +46,7 @@ export default async function ReportsPage() {
         const doneCodes = new Set(
           states.filter((s) => s.status === "completed").map((s) => s.lessonCode),
         );
-        const days = lessons.filter((l) => doneCodes.has(l.code)).reduce((n, l) => n + l.days, 0);
+        const days = lessons.filter((l) => doneCodes.has(l.code)).length;
         const evidence = currentEvidence({ enrollmentId: e.id });
         const plans = d.interventions.filter(
           (i) =>

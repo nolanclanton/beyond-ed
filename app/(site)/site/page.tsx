@@ -381,9 +381,7 @@ export default async function SitePage() {
                     );
                     return (
                       n +
-                      courseLessons(course)
-                        .filter((l) => done.has(l.code))
-                        .reduce((m, l) => m + l.days, 0)
+                      courseLessons(course).filter((l) => done.has(l.code)).length
                     );
                   }, 0);
                   const status = mine[0]?.status ?? "pending";

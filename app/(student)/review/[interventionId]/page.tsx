@@ -20,6 +20,7 @@ import { evidenceByIds } from "@/lib/evidence/ledger";
 import { lessonLabel, skillLabel } from "@/lib/views/learning-focus";
 import { entryById } from "@/lib/intervention/library";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
+import { LessonBlocks } from "@/lib/design/lesson-blocks";
 import { ANTI_LOOP_MAX_CYCLES } from "@/lib/rules/versions";
 
 import { ReadinessRunner, StartSupportForm, TransferForm } from "./support-forms";
@@ -172,10 +173,8 @@ export default async function SupportPage({
                 />
                 <div className="p-5">
                   <p className="text-base font-semibold text-ink">{teaching.goal}</p>
-                  <div className="mt-3 max-w-2xl space-y-3 text-sm text-ink">
-                    {teaching.instruction.slice(0, 2).map((p) => (
-                      <p key={p}>{p}</p>
-                    ))}
+                  <div className="mt-3">
+                    <LessonBlocks blocks={teaching.instruction.slice(0, 2)} />
                   </div>
                 </div>
               </Card>

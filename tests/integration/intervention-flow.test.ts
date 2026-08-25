@@ -59,7 +59,7 @@ describe("the support-to-return loop", () => {
     );
     expect(plan.status).toBe("assigned");
     expect(plan.decidedByUserId).toBe("u_alvarez");
-    expect(plan.returnLessonCode).toBe("M6-U1-L2");
+    expect(plan.returnLessonCode).toBe("MATH-06-L035");
     expect(plan.returnRuleVersion).toBe(DEFAULT_RETURN_RULE.version);
     expect(plan.readinessMinPercent).toBe(80);
     expect(plan.transferItemsRequired).toBe(1);
@@ -82,7 +82,7 @@ describe("the support-to-return loop", () => {
     expect(event?.reason).toBe("Two attempts missed on the same ratio item.");
     expect(JSON.parse(event?.after ?? "{}")).toMatchObject({
       status: "assigned",
-      returnTo: "M6-U1-L2 stage 1",
+      returnTo: "MATH-06-L035 stage 1",
     });
   });
 
@@ -140,7 +140,7 @@ describe("the support-to-return loop", () => {
       studentId: "u_amara",
       enrollmentId: enrollment.id,
       courseVersionId: enrollment.courseVersionId,
-      lessonCode: "M6-U1-L2",
+      lessonCode: "MATH-06-L035",
       stage: "Exit Ticket",
       standard: "6.RP.1",
       skill: "6.RP.1",
@@ -199,7 +199,7 @@ describe("the support-to-return loop", () => {
     );
     expect(outcome.passed).toBe(true);
     expect(outcome.status).toBe("returned_to_pathway");
-    expect(outcome.returnTo).toEqual({ lessonCode: "M6-U1-L2", stage: 1 });
+    expect(outcome.returnTo).toEqual({ lessonCode: "MATH-06-L035", stage: 1 });
   });
 
   it("does not propose the same support again after a successful return", () => {
@@ -242,7 +242,7 @@ describe("the support-to-return loop", () => {
       studentId: "u_amara",
       enrollmentId: enrollment.id,
       courseVersionId: enrollment.courseVersionId,
-      lessonCode: "M6-U1-L2",
+      lessonCode: "MATH-06-L035",
       stage: "Exit Ticket",
       standard: "6.RP.1",
       skill: "6.RP.1",

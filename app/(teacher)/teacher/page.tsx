@@ -17,7 +17,8 @@ import {
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { evidenceByIds } from "@/lib/evidence/ledger";
 import { actionQueue } from "@/lib/intervention/queue";
-import { entryById, MINUTES_CAVEAT } from "@/lib/intervention/library";
+import { entryById } from "@/lib/intervention/library";
+import { SUPPORT_MINUTES } from "@/lib/intervention/bank";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { CONFIDENCE_BANDS } from "@/lib/mastery/profile";
 import { RULE_VERSIONS } from "@/lib/rules/versions";
@@ -208,7 +209,7 @@ export default async function TeacherQueuePage() {
                               <>
                                 <span className="font-mono text-xs">{rec.currentLessonCode}</span>
                                 {lesson ? (
-                                  <span className="block">{lesson.lesson.sequence}</span>
+                                  <span className="block">{lesson.lesson.title}</span>
                                 ) : null}
                               </>
                             ),
@@ -259,7 +260,8 @@ export default async function TeacherQueuePage() {
                         </table>
                       </ScrollX>
                       <p className="mt-2 text-xs text-ink-muted">
-                        Every input is stored with the recommendation. {MINUTES_CAVEAT}
+                        Every input is stored with the recommendation. Each support
+                        in the bank runs {SUPPORT_MINUTES} minutes.
                       </p>
                     </details>
 

@@ -86,27 +86,27 @@ describe("learning focus", () => {
   });
 
   it("resolves a readiness skill through its lesson", () => {
-    const focus = focusForSkill("M6-U0-L1-readiness");
+    const focus = focusForSkill("MATH-06-L001-readiness");
     expect(focus?.courseTitle).toBe("Mathematics 6");
     expect(focus?.title.length).toBeGreaterThan(0);
   });
 
   it("prefers an authored goal, which is already written to a student", () => {
-    const focus = focusForLesson("M6-U1-L2");
+    const focus = focusForLesson("MATH-06-L035");
     expect(focus?.description).toBe(
       "Find and use a unit rate to compare two quantities measured in different units.",
     );
-    expect(focus?.position).toBe("Lesson 2 of 3");
+    expect(focus?.position).toBe("Lesson 5 of 15");
   });
 
   it("falls back to the lesson's own description when nothing is authored", () => {
-    const focus = focusForLesson("M6-U2-L1");
+    const focus = focusForLesson("MATH-06-L005");
     expect(focus?.description.length).toBeGreaterThan(0);
     expect(focus?.description).not.toContain("6.NS");
   });
 
   it("never hands back a raw code as a label", () => {
-    for (const skill of ["6.RP.2", "RL.9-10.2", "HSS-6.1.1", "MS-ETS1-2"]) {
+    for (const skill of ["6.RP.2", "RL.9-10.2", "HSS.6.1.1", "MS-ETS1-2"]) {
       expect(skillLabel(skill)).not.toContain(skill);
       expect(skillLabel(skill).length).toBeGreaterThan(3);
     }

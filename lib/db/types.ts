@@ -188,7 +188,7 @@ export type Intervention = {
   studentId: string;
   enrollmentId: string;
   status: InterventionStatus;
-  /** Intervention lesson id from the catalog, e.g. `I-M6-U1-L1`. */
+  /** Support id from the reusable intervention bank, e.g. `M-INT-013`. */
   interventionLessonId: string;
   targetSkill: string;
   targetStandard: string | null;
@@ -296,10 +296,52 @@ export type AuthoredQuizItem = {
   addedByUserId: string;
 };
 
+/**
+ * ---------------------------------------------------------------------------
+ * Lesson canvas blocks
+ * ---------------------------------------------------------------------------
+ *
+ * What a curriculum author composes for the instruction stage: an ordered list
+ * of typed blocks rather than a wall of paragraphs. Each kind renders the same
+ * way everywhere it appears, so a lesson looks like the rest of the product
+ * however it was written, and every block that can exclude a reader carries the
+ * thing that stops it doing so — an image has required alternative text, a
+ * video keeps the transcript it was attached with (CLAUDE.md §12).
+ *
+ * `memory` is the one warm tone available, and it means what amber means
+ * everywhere else in the product: something to hold on to and retrieve later
+ * (CLAUDE.md §13). It is not for emphasis.
+ */
+export type CalloutTone = "note" | "important" | "example" | "memory";
+
+export const LESSON_BLOCK_KINDS = [
+  "heading",
+  "text",
+  "callout",
+  "list",
+  "definition",
+  "table",
+  "image",
+  "video",
+] as const;
+
+export type LessonBlockKind = (typeof LESSON_BLOCK_KINDS)[number];
+
+export type LessonBlock =
+  | { id: string; kind: "heading"; text: string }
+  | { id: string; kind: "text"; text: string }
+  | { id: string; kind: "callout"; tone: CalloutTone; title: string; text: string }
+  | { id: string; kind: "list"; ordered: boolean; items: string[] }
+  | { id: string; kind: "definition"; term: string; meaning: string }
+  | { id: string; kind: "table"; caption: string; headers: string[]; rows: string[][] }
+  | { id: string; kind: "image"; url: string; alt: string; caption: string }
+  /** References a video already attached to the lesson, by its id. */
+  | { id: string; kind: "video"; videoId: string };
+
 export type AuthoredLesson = {
   id: string;
   courseVersionId: string;
-  /** Stable catalog identifier, e.g. `M6-U1-L2`. Never regenerated on edit. */
+  /** Stable catalog identifier, e.g. `MATH-06-L035`. Never regenerated on edit. */
   lessonCode: string;
 
   /** Stage 3 — why this lesson exists for the person reading it. */
@@ -307,8 +349,8 @@ export type AuthoredLesson = {
   /** Stage 4 — the goal and how a student knows they met it. */
   goal: string;
   successCriteria: string[];
-  /** Stage 5 — the script: accessible instruction, in order. */
-  instruction: string[];
+  /** Stage 5 — the canvas: accessible instruction, composed in order. */
+  blocks: LessonBlock[];
   vocabulary: { term: string; meaning: string }[];
   /** Stage 6 — the worked model, exposing reasoning rather than the answer. */
   workedModel: { step: string; reasoning: string }[];

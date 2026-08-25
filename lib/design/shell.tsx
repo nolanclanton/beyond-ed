@@ -149,8 +149,9 @@ export const SITE_NAV: NavItem[] = [
 
 export const ORG_NAV: NavItem[] = [
   { label: "Organization", href: "/org" },
-  { label: "Curriculum governance", href: "/org/curriculum" },
+  { label: "Courses", href: "/org/curriculum/courses" },
   { label: "Lesson studio", href: "/org/curriculum/build" },
+  { label: "Versions", href: "/org/curriculum" },
   { label: "Intervention system", href: "/org/intervention" },
   { label: "Permissions", href: "/org/permissions" },
   { label: "Audit", href: "/org/audit" },

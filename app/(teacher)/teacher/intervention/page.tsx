@@ -14,13 +14,12 @@ import {
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 import { actionQueue } from "@/lib/intervention/queue";
+import { entryById, searchLibrary } from "@/lib/intervention/library";
 import {
-  entryById,
-  families,
-  familyTotals,
-  searchLibrary,
-  starterLessons,
-} from "@/lib/intervention/library";
+  SUPPORTS,
+  SUPPORT_MINUTES,
+  supportCountBySubject,
+} from "@/lib/intervention/bank";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { CAPACITY_CONTRACT, DEFAULT_RETURN_RULE } from "@/lib/rules/versions";
 
@@ -71,7 +70,6 @@ export default async function InterventionCenterPage({
   );
 
   const results = q ? searchLibrary(q) : [];
-  const totals = familyTotals();
 
   return (
     <div className="py-6">
@@ -163,7 +161,7 @@ export default async function InterventionCenterPage({
       <section aria-labelledby="find-support" className="mt-10">
         <SectionHeading
           id="find-support"
-          hint={`${totals.total} lessons across ${families().length} families. Search by standard, lesson id, course, or target.`}
+          hint={`${SUPPORTS.length} supports in the bank. Search by standard, support id, course, or basic skill.`}
         >
           Find support
         </SectionHeading>
@@ -231,10 +229,10 @@ export default async function InterventionCenterPage({
         </Card>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {totals.bySubject.map((s) => (
+          {supportCountBySubject().map((s) => (
             <Card key={s.subject} className="p-4">
-              <p className="text-2xl font-bold text-ink">{s.lessons}</p>
-              <p className="text-sm text-ink-muted">{s.subject} lessons</p>
+              <p className="text-2xl font-bold text-ink">{s.supports}</p>
+              <p className="text-sm text-ink-muted">{s.subject} supports</p>
             </Card>
           ))}
         </div>
@@ -337,34 +335,44 @@ export default async function InterventionCenterPage({
         </p>
       </section>
 
-      <section aria-labelledby="starter" className="mt-10">
+      <section aria-labelledby="bank" className="mt-10">
         <SectionHeading
-          id="starter"
-          hint="From the blueprint's starter inventory — the minimum metadata each library lesson carries."
+          id="bank"
+          hint={`${SUPPORTS.length} supports, ${SUPPORT_MINUTES} minutes each, reusable across every course that names them.`}
         >
-          Starter lesson inventory
+          The support bank
         </SectionHeading>
         <Card>
-          <CardHeader title="Named seed lessons" hint={`${starterLessons().length} lessons across four subjects`} />
+          <CardHeader
+            title="Every support, with what triggers it and what closes it"
+            hint="A support is assigned from the action queue, where its trigger evidence is."
+          />
           <ScrollX>
-            <table className="w-full min-w-[52rem] border-collapse text-sm">
+            <table className="w-full min-w-[56rem] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-line text-left">
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Lesson</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Target</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Typical trigger</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Transfer evidence</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Support</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Basic skill</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Diagnostic trigger</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Exit criterion</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {starterLessons().map((l) => (
-                  <tr key={l.lessonId}>
-                    <th scope="row" className="px-5 py-2.5 text-left font-mono text-xs text-ink">
-                      {l.lessonId}
+                {SUPPORTS.map((support) => (
+                  <tr key={support.id}>
+                    <th scope="row" className="px-5 py-2.5 text-left align-top">
+                      <span className="font-mono text-xs text-ink">{support.id}</span>
+                      <span className="mt-0.5 block text-xs font-normal text-ink-muted">
+                        {support.category}
+                      </span>
                     </th>
-                    <td className="px-5 py-2.5 text-xs text-ink">{l.target}</td>
-                    <td className="px-5 py-2.5 text-xs text-ink-muted">{l.trigger}</td>
-                    <td className="px-5 py-2.5 text-xs text-ink-muted">{l.transfer}</td>
+                    <td className="px-5 py-2.5 align-top text-xs text-ink">{support.skill}</td>
+                    <td className="px-5 py-2.5 align-top text-xs text-ink-muted">
+                      {support.trigger}
+                    </td>
+                    <td className="px-5 py-2.5 align-top text-xs text-ink-muted">
+                      {support.exitCriteria}
+                    </td>
                   </tr>
                 ))}
               </tbody>

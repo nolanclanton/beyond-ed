@@ -8,15 +8,14 @@ import {
   courseLessons,
   findLesson,
   getCourse,
-  instructionalSection,
-  interventionId,
-  interventionTarget,
-  lessonTopic,
+  lessonType,
   primaryStandards,
   type CatalogCourse,
   type CatalogLesson,
   type CatalogUnit,
 } from "@/lib/curriculum/catalog";
+import { prerequisiteSupports } from "@/lib/curriculum/prerequisites";
+import { supportById } from "@/lib/intervention/bank";
 import { LESSON_STATUS_PRESENTATION, type LessonStatus } from "@/lib/curriculum/lesson-status";
 import { db, lessonStatesFor } from "@/lib/db/store";
 import { hasExitTicketFor } from "@/lib/curriculum/lesson-bank";
@@ -24,7 +23,7 @@ import type { Enrollment, Intervention, TeacherMessage, User } from "@/lib/db/ty
 import { currentEvidence } from "@/lib/evidence/ledger";
 import { INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { interventionsForStudent } from "@/lib/intervention/lifecycle";
-import { focusForLesson } from "./learning-focus";
+import { focusForLesson, skillLabel } from "./learning-focus";
 
 export type PathwayLocation = {
   enrollmentId: string;
@@ -32,13 +31,14 @@ export type PathwayLocation = {
   courseVersion: string;
   unit: CatalogUnit;
   lesson: CatalogLesson;
-  instructionalSection: string;
+  /** What kind of lesson this is in the unit arc, e.g. `Guided practice`. */
+  lessonType: string;
   topic: string;
   status: LessonStatus;
   stage: number;
   standards: string[];
-  interventionLessonId: string;
-  interventionTarget: string;
+  /** Supports the curriculum names as prerequisites for this lesson. */
+  linkedSupports: { id: string; skill: string }[];
   hasItems: boolean;
   href: string;
 };
@@ -75,13 +75,15 @@ export function locationFor(
     courseVersion: versionLabel(enrollment.courseVersionId),
     unit: found.unit,
     lesson: found.lesson,
-    instructionalSection: instructionalSection(found.lesson),
-    topic: lessonTopic(found.lesson),
+    lessonType: lessonType(found.lesson),
+    topic: found.lesson.title,
     status: state?.status ?? "locked",
     stage: state?.stage ?? 1,
     standards: primaryStandards(found.lesson),
-    interventionLessonId: interventionId(found.lesson),
-    interventionTarget: interventionTarget(found.lesson),
+    linkedSupports: prerequisiteSupports(found.lesson.code)
+      .map((p) => supportById(p.id))
+      .filter((s): s is NonNullable<typeof s> => Boolean(s))
+      .map((s) => ({ id: s.id, skill: s.skill })),
     hasItems: hasExitTicketFor(found.lesson.code, enrollment.courseVersionId),
     href: `/learn/${enrollment.id}/${found.lesson.code}`,
   };
@@ -128,7 +130,7 @@ export function coursesFor(student: User): CourseProgress[] {
         current: resumeLocation(enrollment),
         completed: done.length,
         total: lessons.length,
-        daysCompleted: lessons.filter((l) => doneCodes.has(l.code)).reduce((n, l) => n + l.days, 0),
+        daysCompleted: lessons.filter((l) => doneCodes.has(l.code)).length,
         daysTotal: course.pathwayDays,
       } satisfies CourseProgress;
     })
@@ -177,7 +179,9 @@ export function priorityActions(student: User): PriorityAction[] {
     out.push({
       kind: "intervention",
       id: plan.id,
-      title: `Short support: ${plan.targetStandard ?? plan.targetSkill}`,
+      // Plain language, never a standard code: a student is told what the
+      // support is about, not which coverage record it satisfies (CLAUDE.md §13).
+      title: `Short support: ${skillLabel(plan.targetStandard ?? plan.targetSkill)}`,
       reason: plan.triggerSummary,
       effort: `About ${plan.estimatedMinutes} minutes`,
       statusLabel: presentation.label,
@@ -203,11 +207,8 @@ export function priorityActions(student: User): PriorityAction[] {
       title: `${progress.course.title}: ${location.topic}`,
       reason:
         focus?.description ??
-        `This is the next lesson in ${location.unit.name}.`,
-      effort:
-        location.lesson.days === 1
-          ? "A single course day"
-          : `Spans ${location.lesson.days} course days (days ${location.lesson.dayRange})`,
+        `This is the next lesson in ${location.unit.title}.`,
+      effort: `Day ${location.lesson.day} of ${progress.course.pathwayDays}`,
       statusLabel: presentation.label,
       statusMeaning: presentation.studentMeaning,
       href: location.href,
@@ -243,7 +244,7 @@ export function alertsFor(student: User): StudentAlert[] {
         id: plan.id,
         tone: "notice",
         title: "Your teacher is setting up time with you",
-        detail: `Two rounds on ${plan.targetStandard ?? plan.targetSkill} did not get there, so this is a conversation now rather than another retry.`,
+        detail: `Two rounds on ${skillLabel(plan.targetStandard ?? plan.targetSkill)} did not get there, so this is a conversation now rather than another retry.`,
       });
     }
   }

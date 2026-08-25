@@ -26,6 +26,7 @@ import {
   transact,
   withIdempotency,
 } from "@/lib/db/store";
+import { categoryIdFor } from "@/lib/grades/gradebook";
 import { ALL_ITEMS } from "@/lib/db/demo-items";
 import {
   bankItemById,
@@ -328,10 +329,7 @@ export function submitExitTicket(
         const band = bandFor(percent);
 
         // --- Official grade record. Separate table, separate calculation. ---
-        // L3 lessons carry the assessment; everything else is a knowledge check.
-        const categoryId = `gc_${enrollment.courseTitle.replace(/[^A-Za-z0-9]+/g, "_")}_${
-          /-(L3)$/.test(lessonCode) ? "AS" : "KC"
-        }`;
+        const categoryId = categoryIdFor(enrollment.courseTitle, lessonCode);
         const priorForLesson = db().gradeRecords.filter(
           (r) => r.enrollmentId === enrollmentId && r.lessonCode === lessonCode,
         );

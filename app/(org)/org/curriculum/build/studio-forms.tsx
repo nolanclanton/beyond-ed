@@ -5,12 +5,21 @@ import { useState } from "react";
 import {
   addLessonVideoAction,
   createDraftVersionAction,
+  moveLessonBlockAction,
+  removeLessonBlockAction,
   removeLessonVideoAction,
   removeQuizItemAction,
+  saveLessonBlockAction,
   saveLessonScriptAction,
   saveQuizItemAction,
 } from "@/lib/actions/lesson-authoring";
-import type { AuthoredLesson, AuthoredQuizItem, ItemPurpose } from "@/lib/db/types";
+import type {
+  AuthoredLesson,
+  AuthoredQuizItem,
+  ItemPurpose,
+  LessonBlock,
+  LessonVideo,
+} from "@/lib/db/types";
 import { ActionForm } from "@/lib/design/action-form";
 import { Button } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
@@ -145,20 +154,6 @@ export function ScriptForm({
           </Field>
 
           <Field
-            label="Instruction — stage 5"
-            htmlFor={id("instruction")}
-            hint="The script itself. One paragraph per line."
-          >
-            <textarea
-              id={id("instruction")}
-              name="instruction"
-              rows={6}
-              defaultValue={(draft?.instruction ?? []).join("\n")}
-              className={FIELD}
-            />
-          </Field>
-
-          <Field
             label="Vocabulary"
             htmlFor={id("vocabulary")}
             hint="One per line, as: term :: what it means"
@@ -246,6 +241,536 @@ export function ScriptForm({
           <div>
             <Button emphasis="primary" disabled={pending}>
               {pending ? "Saving…" : "Save script"}
+            </Button>
+          </div>
+        </>
+      )}
+    </ActionForm>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The lesson canvas
+// ---------------------------------------------------------------------------
+
+const KINDS: { value: LessonBlock["kind"]; label: string; hint: string }[] = [
+  { value: "text", label: "Paragraph", hint: "The explanation itself." },
+  { value: "heading", label: "Heading", hint: "Breaks a long stage into parts." },
+  { value: "callout", label: "Callout", hint: "A boxed aside." },
+  { value: "list", label: "List", hint: "Steps, criteria, or examples." },
+  { value: "definition", label: "Key term", hint: "A term and its meaning." },
+  { value: "table", label: "Table", hint: "A comparison a paragraph would hide." },
+  { value: "image", label: "Image", hint: "A diagram or photograph." },
+  { value: "video", label: "Video", hint: "A video already attached to this lesson." },
+];
+
+const TONES: { value: string; label: string; hint: string }[] = [
+  { value: "note", label: "Note", hint: "Quiet aside." },
+  { value: "important", label: "Important", hint: "Do not miss this." },
+  { value: "example", label: "Example", hint: "A worked instance." },
+  {
+    value: "memory",
+    label: "Remember",
+    hint: "Amber. Only for something that comes back in review later.",
+  },
+];
+
+/**
+ * Places or replaces one block on the lesson canvas.
+ *
+ * The kind selector switches which fields are asked for, so an author is never
+ * looking at a form field that does not apply to what they are making. Every
+ * field is still submitted and the SERVER decides what the block is, so a
+ * hand-made request cannot produce a block the renderer cannot draw.
+ */
+export function BlockForm({
+  versionId,
+  lessonCode,
+  videos,
+  block,
+  seq,
+  onDone,
+}: {
+  versionId: string;
+  lessonCode: string;
+  videos: readonly LessonVideo[];
+  block?: LessonBlock;
+  seq: number;
+  onDone?: () => void;
+}) {
+  const [kind, setKind] = useState<LessonBlock["kind"]>(block?.kind ?? "text");
+  const id = (name: string) => `block-${lessonCode}-${block?.id ?? `new${seq}`}-${name}`;
+  const editing = Boolean(block);
+
+  return (
+    <ActionForm
+      action={saveLessonBlockAction}
+      idempotencyKey={`lesson-block:${versionId}:${lessonCode}:${block?.id ?? `new:${seq}`}`}
+      onSuccessNote={() => (onDone ? <span>Reopen the canvas to keep building.</span> : null)}
+    >
+      {(pending) => (
+        <>
+          <input type="hidden" name="versionId" value={versionId} />
+          <input type="hidden" name="lessonCode" value={lessonCode} />
+          <input type="hidden" name="blockId" value={block?.id ?? ""} />
+          <input type="hidden" name="kind" value={kind} />
+
+          <fieldset>
+            <legend className={LABEL}>What are you adding?</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {KINDS.map((option) => {
+                const active = option.value === kind;
+                const disabled = option.value === "video" && videos.length === 0;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={active}
+                    onClick={() => setKind(option.value)}
+                    title={
+                      disabled
+                        ? "Attach a video to this lesson first."
+                        : option.hint
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING} ${
+                      active
+                        ? "border-primary bg-primary text-white"
+                        : "border-line bg-surface text-ink-muted hover:border-primary-line hover:text-primary"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className={HINT}>{KINDS.find((k) => k.value === kind)?.hint}</p>
+          </fieldset>
+
+          {kind === "heading" || kind === "text" ? (
+            <Field
+              label={kind === "heading" ? "Heading" : "Paragraph"}
+              htmlFor={id("text")}
+            >
+              <textarea
+                id={id("text")}
+                name="text"
+                rows={kind === "heading" ? 1 : 4}
+                maxLength={8000}
+                defaultValue={
+                  block && (block.kind === "heading" || block.kind === "text")
+                    ? block.text
+                    : ""
+                }
+                className={FIELD}
+              />
+            </Field>
+          ) : null}
+
+          {kind === "callout" ? (
+            <>
+              <fieldset>
+                <legend className={LABEL}>Tone</legend>
+                <div className="mt-1.5 flex flex-wrap gap-4">
+                  {TONES.map((tone) => (
+                    <label key={tone.value} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="tone"
+                        value={tone.value}
+                        defaultChecked={
+                          block?.kind === "callout"
+                            ? block.tone === tone.value
+                            : tone.value === "note"
+                        }
+                        className={FOCUS_RING}
+                      />
+                      <span>
+                        <span className="font-medium text-ink">{tone.label}</span>
+                        <span className="block text-xs text-ink-muted">{tone.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <Field label="Title (optional)" htmlFor={id("title")}>
+                <input
+                  id={id("title")}
+                  name="title"
+                  maxLength={200}
+                  defaultValue={block?.kind === "callout" ? block.title : ""}
+                  className={FIELD}
+                />
+              </Field>
+              <Field label="Text" htmlFor={id("ctext")}>
+                <textarea
+                  id={id("ctext")}
+                  name="text"
+                  rows={3}
+                  maxLength={8000}
+                  defaultValue={block?.kind === "callout" ? block.text : ""}
+                  className={FIELD}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          {kind === "list" ? (
+            <>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  name="ordered"
+                  defaultChecked={block?.kind === "list" ? block.ordered : false}
+                  className={FOCUS_RING}
+                />
+                Numbered — use this when order matters
+              </label>
+              <Field label="Items" htmlFor={id("items")} hint="One per line.">
+                <textarea
+                  id={id("items")}
+                  name="items"
+                  rows={5}
+                  defaultValue={block?.kind === "list" ? block.items.join("\n") : ""}
+                  className={FIELD}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          {kind === "definition" ? (
+            <>
+              <Field label="Term" htmlFor={id("term")}>
+                <input
+                  id={id("term")}
+                  name="term"
+                  maxLength={200}
+                  defaultValue={block?.kind === "definition" ? block.term : ""}
+                  className={FIELD}
+                />
+              </Field>
+              <Field label="What it means" htmlFor={id("meaning")}>
+                <textarea
+                  id={id("meaning")}
+                  name="meaning"
+                  rows={2}
+                  maxLength={1000}
+                  defaultValue={block?.kind === "definition" ? block.meaning : ""}
+                  className={FIELD}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          {kind === "table" ? (
+            <>
+              <Field label="Caption (optional)" htmlFor={id("caption")}>
+                <input
+                  id={id("caption")}
+                  name="caption"
+                  maxLength={400}
+                  defaultValue={block?.kind === "table" ? block.caption : ""}
+                  className={FIELD}
+                />
+              </Field>
+              <Field
+                label="Column headings"
+                htmlFor={id("headers")}
+                hint="Separated by a vertical bar, e.g. Design | Hours | Cost"
+              >
+                <input
+                  id={id("headers")}
+                  name="headers"
+                  maxLength={1200}
+                  defaultValue={block?.kind === "table" ? block.headers.join(" | ") : ""}
+                  className={FIELD}
+                />
+              </Field>
+              <Field
+                label="Rows"
+                htmlFor={id("rows")}
+                hint="One row per line, cells separated by a vertical bar."
+              >
+                <textarea
+                  id={id("rows")}
+                  name="rows"
+                  rows={5}
+                  defaultValue={
+                    block?.kind === "table"
+                      ? block.rows.map((row) => row.join(" | ")).join("\n")
+                      : ""
+                  }
+                  className={FIELD}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          {kind === "image" ? (
+            <>
+              <Field
+                label="Image address"
+                htmlFor={id("url")}
+                hint="Where the file is hosted. Beyond.Ed stores the address, not the file."
+              >
+                <input
+                  id={id("url")}
+                  name="url"
+                  type="url"
+                  maxLength={2000}
+                  placeholder="https://…"
+                  defaultValue={block?.kind === "image" ? block.url : ""}
+                  className={FIELD}
+                />
+              </Field>
+              <Field
+                label="Alternative text"
+                htmlFor={id("alt")}
+                hint="Required. What the image shows, for a student who cannot see it."
+              >
+                <textarea
+                  id={id("alt")}
+                  name="alt"
+                  rows={2}
+                  maxLength={600}
+                  defaultValue={block?.kind === "image" ? block.alt : ""}
+                  className={FIELD}
+                />
+              </Field>
+              <Field label="Caption (optional)" htmlFor={id("icaption")}>
+                <input
+                  id={id("icaption")}
+                  name="caption"
+                  maxLength={400}
+                  defaultValue={block?.kind === "image" ? block.caption : ""}
+                  className={FIELD}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          {kind === "video" ? (
+            <Field
+              label="Which video"
+              htmlFor={id("videoId")}
+              hint="Its transcript travels with it."
+            >
+              <select
+                id={id("videoId")}
+                name="videoId"
+                defaultValue={block?.kind === "video" ? block.videoId : ""}
+                className={FIELD}
+              >
+                {videos.map((video) => (
+                  <option key={video.id} value={video.id}>
+                    {video.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
+
+          <ReasonField
+            id={id("reason")}
+            placeholder={
+              editing
+                ? "Rewrote the comparison table after the pilot."
+                : "Added the worked comparison students kept asking for."
+            }
+          />
+
+          <div>
+            <Button emphasis="primary" disabled={pending}>
+              {pending
+                ? "Saving…"
+                : editing
+                  ? "Save this block"
+                  : "Add to the canvas"}
+            </Button>
+          </div>
+        </>
+      )}
+    </ActionForm>
+  );
+}
+
+/** Opens the add-a-block form. Collapsed by default so the canvas reads first. */
+export function AddBlockPanel({
+  versionId,
+  lessonCode,
+  videos,
+  seq,
+}: {
+  versionId: string;
+  lessonCode: string;
+  videos: readonly LessonVideo[];
+  seq: number;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <Button
+        type="button"
+        emphasis={open ? "secondary" : "primary"}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? "Close" : "Add a block"}
+      </Button>
+      {open ? (
+        <div className="mt-4 rounded-xl border border-line bg-surface-sunken p-4">
+          <BlockForm
+            versionId={versionId}
+            lessonCode={lessonCode}
+            videos={videos}
+            seq={seq}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Edit-in-place for one existing block. */
+export function EditBlockPanel({
+  versionId,
+  lessonCode,
+  videos,
+  block,
+}: {
+  versionId: string;
+  lessonCode: string;
+  videos: readonly LessonVideo[];
+  block: LessonBlock;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className={`text-xs font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
+      >
+        {open ? "Cancel" : "Edit"}
+      </button>
+      {open ? (
+        <div className="mt-3 rounded-xl border border-line bg-surface-sunken p-4 text-left">
+          <BlockForm
+            versionId={versionId}
+            lessonCode={lessonCode}
+            videos={videos}
+            block={block}
+            seq={0}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function MoveBlockForm({
+  versionId,
+  lessonCode,
+  blockId,
+  position,
+  direction,
+  disabled,
+}: {
+  versionId: string;
+  lessonCode: string;
+  blockId: string;
+  /** Where the block sits now. Part of the key, so a double click moves once. */
+  position: number;
+  direction: "up" | "down";
+  disabled: boolean;
+}) {
+  if (disabled) {
+    return (
+      <span
+        aria-hidden="true"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-line text-sm text-line-strong"
+      >
+        {direction === "up" ? "\u2191" : "\u2193"}
+      </span>
+    );
+  }
+  return (
+    <ActionForm
+      action={moveLessonBlockAction}
+      idempotencyKey={`block-move:${versionId}:${lessonCode}:${blockId}:${position}:${direction}`}
+    >
+      <input type="hidden" name="versionId" value={versionId} />
+      <input type="hidden" name="lessonCode" value={lessonCode} />
+      <input type="hidden" name="blockId" value={blockId} />
+      <input type="hidden" name="direction" value={direction} />
+      <input
+        type="hidden"
+        name="reason"
+        value={`Reordered the lesson canvas: moved a block ${direction}.`}
+      />
+      <button
+        type="submit"
+        aria-label={`Move ${direction}`}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-sm text-ink-muted hover:border-primary-line hover:text-primary ${FOCUS_RING}`}
+      >
+        {direction === "up" ? "\u2191" : "\u2193"}
+      </button>
+    </ActionForm>
+  );
+}
+
+export function RemoveBlockForm({
+  versionId,
+  lessonCode,
+  blockId,
+}: {
+  versionId: string;
+  lessonCode: string;
+  blockId: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className={`text-xs font-semibold text-urgent underline-offset-4 hover:underline ${FOCUS_RING}`}
+      >
+        Remove
+      </button>
+    );
+  }
+  return (
+    <ActionForm
+      action={removeLessonBlockAction}
+      idempotencyKey={`block-remove:${versionId}:${lessonCode}:${blockId}`}
+    >
+      {(pending) => (
+        <>
+          <input type="hidden" name="versionId" value={versionId} />
+          <input type="hidden" name="lessonCode" value={lessonCode} />
+          <input type="hidden" name="blockId" value={blockId} />
+          <Field
+            label="Reason"
+            htmlFor={`remove-block-${blockId}`}
+            hint="Recorded on the audit event."
+          >
+            <input
+              id={`remove-block-${blockId}`}
+              name="reason"
+              required
+              minLength={4}
+              maxLength={500}
+              className={FIELD}
+            />
+          </Field>
+          <div className="flex gap-3">
+            <Button emphasis="caution" disabled={pending}>
+              {pending ? "Removing…" : "Remove block"}
+            </Button>
+            <Button type="button" emphasis="quiet" onClick={() => setConfirming(false)}>
+              Keep it
             </Button>
           </div>
         </>

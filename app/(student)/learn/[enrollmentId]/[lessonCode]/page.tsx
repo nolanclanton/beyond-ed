@@ -6,8 +6,10 @@ import {
   assessmentDescription,
   findLesson,
   getCourse,
+  lessonType,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STAGES, LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
+import { LessonBlocks, LessonVideoPlayer } from "@/lib/design/lesson-blocks";
 import type { LessonContent } from "@/lib/db/demo-lesson-content";
 import type { LessonVideo } from "@/lib/db/types";
 import {
@@ -140,8 +142,8 @@ export default async function LessonPage({
             tone={finished ? "positive" : started ? "info" : "neutral"}
           />
           <span className="text-xs text-ink-muted">
-            {focus?.position} &middot; about {found.lesson.days} class{" "}
-            {found.lesson.days === 1 ? "day" : "days"}
+            {focus?.position} &middot; {lessonType(found.lesson).toLowerCase()}
+            &middot; day {found.lesson.day}
           </span>
         </div>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
@@ -151,7 +153,7 @@ export default async function LessonPage({
           {focus?.description}
         </p>
         <p className="mt-2 text-sm text-ink-muted">
-          Unit {found.unit.id}: {found.unit.name} &middot; {presentation.studentMeaning}
+          Unit {found.unit.order}: {found.unit.title} &middot; {presentation.studentMeaning}
         </p>
       </header>
 
@@ -173,7 +175,7 @@ export default async function LessonPage({
               {
                 label: "Where you are",
                 value: `${focus?.position ?? ""}${
-                  found.unit.name ? ` in ${found.unit.name}` : ""
+                  found.unit.title ? ` in ${found.unit.title}` : ""
                 }`,
               },
               {
@@ -365,6 +367,13 @@ type StageBodyProps = {
 
 function StageBody(props: StageBodyProps) {
   const { stage, content, videos } = props;
+  // Videos the author attached but did not place on the canvas.
+  const placedVideoIds = new Set(
+    (content?.instruction ?? [])
+      .filter((b) => b.kind === "video")
+      .map((b) => (b.kind === "video" ? b.videoId : "")),
+  );
+  const unplacedVideos = videos.filter((v) => !placedVideoIds.has(v.id));
   const title = LESSON_STAGES[stage - 1];
 
   const notAuthored = (
@@ -504,61 +513,24 @@ function StageBody(props: StageBodyProps) {
             title={`5. ${title}`}
             hint={
               videos.length > 0
-                ? "Readable text first, with the video and its transcript below."
-                : "Readable text first. This lesson has no video."
+                ? "Readable text, with every video's transcript beside it."
+                : "Readable text. This lesson has no video."
             }
           />
           <div className="p-5">
             {content ? (
               <>
-                <div className="max-w-2xl space-y-3 text-base text-ink">
-                  {content.instruction.map((p) => (
-                    <p key={p}>{p}</p>
-                  ))}
-                </div>
+                <LessonBlocks blocks={content.instruction} videos={videos} />
 
-                {videos.length > 0 ? (
-                  <div className="mt-6 flex flex-col gap-4">
-                    {videos.map((video) => (
-                      <div key={video.id} className="rounded-lg border border-line p-4">
-                        <p className="text-sm font-semibold text-ink">{video.title}</p>
-                        <p className="mt-0.5 text-xs text-ink-muted">
-                          {video.minutes ? `${video.minutes} minutes · ` : ""}
-                          transcript below
-                          {video.captionsUrl ? " · captions available" : ""}
-                        </p>
-                        {/*
-                          A plain video element with its captions track. No
-                          autoplay, no third-party player, and the transcript is
-                          on the page whether or not the video plays.
-                        */}
-                        <video
-                          controls
-                          preload="none"
-                          className="mt-3 w-full max-w-2xl rounded-lg border border-line"
-                        >
-                          <source src={video.url} />
-                          {video.captionsUrl ? (
-                            <track
-                              kind="captions"
-                              src={video.captionsUrl}
-                              srcLang="en"
-                              label="English"
-                              default
-                            />
-                          ) : null}
-                        </video>
-                        <details className="mt-3">
-                          <summary
-                            className={`cursor-pointer text-sm font-semibold text-primary ${FOCUS_RING}`}
-                          >
-                            Read the transcript
-                          </summary>
-                          <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm text-ink-muted">
-                            {video.transcript}
-                          </p>
-                        </details>
-                      </div>
+                {/*
+                  Anything the author attached but did not place on the canvas
+                  still belongs on the page: a video a student cannot reach is a
+                  lesson they were not given.
+                */}
+                {unplacedVideos.length > 0 ? (
+                  <div className="mt-6 flex max-w-2xl flex-col gap-4">
+                    {unplacedVideos.map((video) => (
+                      <LessonVideoPlayer key={video.id} video={video} />
                     ))}
                   </div>
                 ) : null}

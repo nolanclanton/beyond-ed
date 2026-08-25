@@ -41,6 +41,7 @@ import type {
   AuthoredQuizItem,
   CourseVersion,
   ItemPurpose,
+  LessonBlock,
   LessonVideo,
   User,
 } from "@/lib/db/types";
@@ -178,9 +179,16 @@ export function lessonReadiness(
       detail: "How a student knows they met the goal, in their own words.",
     },
     {
-      label: "Instruction written",
-      done: (draft?.instruction.length ?? 0) > 0,
-      detail: "Stage 5 — the script itself.",
+      label: "Instruction canvas has blocks",
+      done: (draft?.blocks.length ?? 0) > 0,
+      detail: "Stage 5 — the text, callouts, tables, images, and video a student reads.",
+    },
+    {
+      label: "Every image has alternative text",
+      done: (draft?.blocks ?? []).every(
+        (b) => b.kind !== "image" || b.alt.trim().length > 0,
+      ),
+      detail: "An image without it is invisible to part of the class (CLAUDE.md §12).",
     },
     {
       label: "Worked model written",
@@ -214,6 +222,7 @@ export type VersionAuthoringSummary = {
   lessonsComplete: number;
   videos: number;
   items: number;
+  blocks: number;
 };
 
 export function versionAuthoringSummary(versionId: string): VersionAuthoringSummary {
@@ -230,6 +239,7 @@ export function versionAuthoringSummary(versionId: string): VersionAuthoringSumm
       .length,
     videos: drafts.reduce((n, d) => n + d.videos.length, 0),
     items: drafts.reduce((n, d) => n + d.items.length, 0),
+    blocks: drafts.reduce((n, d) => n + d.blocks.length, 0),
   };
 }
 
@@ -298,7 +308,7 @@ function upsertDraft(
     relevance: "",
     goal: "",
     successCriteria: [],
-    instruction: [],
+    blocks: [],
     vocabulary: [],
     workedModel: [],
     guidedPractice: [],
@@ -319,7 +329,7 @@ function scriptShape(lesson: AuthoredLesson) {
   return {
     goal: lesson.goal.slice(0, 120),
     successCriteria: lesson.successCriteria.length,
-    instruction: lesson.instruction.length,
+    blocks: lesson.blocks.length,
     vocabulary: lesson.vocabulary.length,
     workedModel: lesson.workedModel.length,
     guidedPractice: lesson.guidedPractice.length,
@@ -339,7 +349,6 @@ export type ScriptInput = {
   relevance: string;
   goal: string;
   successCriteria: string[];
-  instruction: string[];
   vocabulary: { term: string; meaning: string }[];
   workedModel: { step: string; reasoning: string }[];
   guidedPractice: { prompt: string; hint: string; answer: string }[];
@@ -368,7 +377,6 @@ export function saveLessonScript(
         lesson.successCriteria = input.successCriteria
           .map((s) => s.trim())
           .filter(Boolean);
-        lesson.instruction = input.instruction.map((s) => s.trim()).filter(Boolean);
         lesson.vocabulary = input.vocabulary
           .map((v) => ({ term: v.term.trim(), meaning: v.meaning.trim() }))
           .filter((v) => v.term && v.meaning);
@@ -401,6 +409,266 @@ export function saveLessonScript(
           reason,
           idempotencyKey,
           requestId: requestIdFor("curriculum.lesson_script_saved", idempotencyKey),
+        });
+
+        return lesson;
+      },
+      (existingId) => {
+        const lesson = db().authoredLessons.find((l) => l.id === existingId);
+        if (!lesson) throw new LessonAuthoringError("Duplicate write with no record.");
+        return lesson;
+      },
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The lesson canvas
+// ---------------------------------------------------------------------------
+
+/** The block kinds an author can place, with what each one is for. */
+export const BLOCK_KINDS: readonly {
+  value: LessonBlock["kind"];
+  label: string;
+  meaning: string;
+}[] = [
+  { value: "heading", label: "Heading", meaning: "Breaks a long stage into parts a student can navigate." },
+  { value: "text", label: "Paragraph", meaning: "The explanation itself." },
+  {
+    value: "callout",
+    label: "Callout",
+    meaning:
+      "A boxed aside. Use the memory tone only for something that comes back later — warmth is reserved for retrieval.",
+  },
+  { value: "list", label: "List", meaning: "Steps, criteria, or examples, bulleted or numbered." },
+  { value: "definition", label: "Key term", meaning: "A term and its meaning, set apart so it can be found again." },
+  { value: "table", label: "Table", meaning: "A comparison a paragraph would hide." },
+  { value: "image", label: "Image", meaning: "A diagram or photograph. Alternative text is required." },
+  { value: "video", label: "Video", meaning: "Places a video already attached to this lesson, with its transcript." },
+];
+
+export type BlockInput = {
+  versionId: string;
+  lessonCode: string;
+  /** Set when replacing an existing block; absent when placing a new one. */
+  blockId: string | null;
+  kind: LessonBlock["kind"];
+  text: string;
+  title: string;
+  tone: "note" | "important" | "example" | "memory";
+  ordered: boolean;
+  items: string[];
+  term: string;
+  meaning: string;
+  caption: string;
+  headers: string[];
+  rows: string[][];
+  url: string;
+  alt: string;
+  videoId: string;
+  reason: string;
+};
+
+/**
+ * Builds the block a `kind` describes, rejecting the ones a student could not
+ * read. The validation is the product, not paperwork: an image with no
+ * alternative text and a video with no transcript are both lessons that exclude
+ * part of the class (CLAUDE.md §12).
+ */
+function buildBlock(
+  lesson: AuthoredLesson,
+  blockId: string,
+  input: BlockInput,
+): LessonBlock {
+  const text = input.text.trim();
+  switch (input.kind) {
+    case "heading":
+      if (text.length === 0) throw new LessonAuthoringError("A heading needs text.");
+      return { id: blockId, kind: "heading", text };
+    case "text":
+      if (text.length === 0) throw new LessonAuthoringError("A paragraph needs text.");
+      return { id: blockId, kind: "text", text };
+    case "callout":
+      if (text.length === 0) throw new LessonAuthoringError("A callout needs text.");
+      return { id: blockId, kind: "callout", tone: input.tone, title: input.title.trim(), text };
+    case "list": {
+      const items = input.items.map((i) => i.trim()).filter(Boolean);
+      if (items.length === 0) throw new LessonAuthoringError("A list needs at least one line.");
+      return { id: blockId, kind: "list", ordered: input.ordered, items };
+    }
+    case "definition": {
+      const term = input.term.trim();
+      const meaning = input.meaning.trim();
+      if (term.length === 0 || meaning.length === 0) {
+        throw new LessonAuthoringError("A key term needs both the term and its meaning.");
+      }
+      return { id: blockId, kind: "definition", term, meaning };
+    }
+    case "table": {
+      const headers = input.headers.map((h) => h.trim()).filter(Boolean);
+      if (headers.length === 0) {
+        throw new LessonAuthoringError("A table needs column headings, so its rows can be read.");
+      }
+      const rows = input.rows
+        .map((row) => row.map((cell) => cell.trim()))
+        .filter((row) => row.some((cell) => cell.length > 0))
+        .map((row) => {
+          const padded = [...row];
+          while (padded.length < headers.length) padded.push("");
+          return padded.slice(0, headers.length);
+        });
+      if (rows.length === 0) throw new LessonAuthoringError("A table needs at least one row.");
+      return { id: blockId, kind: "table", caption: input.caption.trim(), headers, rows };
+    }
+    case "image": {
+      const url = normalizeMediaUrl(input.url);
+      const alt = input.alt.trim();
+      if (alt.length === 0) {
+        throw new LessonAuthoringError(
+          "An image needs alternative text. Without it the image is simply missing for part of the class.",
+        );
+      }
+      return { id: blockId, kind: "image", url, alt, caption: input.caption.trim() };
+    }
+    case "video": {
+      const video = lesson.videos.find((v) => v.id === input.videoId);
+      if (!video) {
+        throw new LessonAuthoringError(
+          "Attach the video to this lesson first; the canvas places a video it already has, with its transcript.",
+        );
+      }
+      return { id: blockId, kind: "video", videoId: video.id };
+    }
+  }
+}
+
+/** Places a new block at the end of the canvas, or replaces one in place. */
+export function saveLessonBlock(
+  actor: User,
+  input: BlockInput,
+  idempotencyKey: string,
+): LessonBlock {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = upsertDraft(version, input.lessonCode, actor);
+
+        const blockId = input.blockId ?? nextId("ab");
+        const block = buildBlock(lesson, blockId, input);
+        const existingAt = lesson.blocks.findIndex((b) => b.id === blockId);
+
+        if (existingAt >= 0) lesson.blocks[existingAt] = block;
+        else lesson.blocks.push(block);
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: existingAt >= 0 ? "curriculum.block_changed" : "curriculum.block_added",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: existingAt >= 0 ? { blockId, position: existingAt } : { blocks: lesson.blocks.length - 1 },
+          after: { blockId, kind: block.kind, blocks: lesson.blocks.length },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.block_saved", idempotencyKey),
+        });
+
+        return block;
+      },
+      () => {
+        throw new LessonAuthoringError(
+          "That block was already saved by an earlier submission.",
+        );
+      },
+    ),
+  );
+}
+
+/** Moves a block one position up or down. Order is the lesson's own reading order. */
+export function moveLessonBlock(
+  actor: User,
+  input: { versionId: string; lessonCode: string; blockId: string; direction: "up" | "down"; reason: string },
+  idempotencyKey: string,
+): AuthoredLesson {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = authoredLesson(version.id, input.lessonCode);
+        if (!lesson) throw new LessonAuthoringError("That lesson has no draft content.");
+
+        const at = lesson.blocks.findIndex((b) => b.id === input.blockId);
+        if (at < 0) throw new LessonAuthoringError("That block is not on this lesson.");
+        const to = input.direction === "up" ? at - 1 : at + 1;
+        if (to < 0 || to >= lesson.blocks.length) {
+          throw new LessonAuthoringError("That block is already at the end of the canvas.");
+        }
+
+        const moved = lesson.blocks[at];
+        lesson.blocks[at] = lesson.blocks[to];
+        lesson.blocks[to] = moved;
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: "curriculum.block_moved",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: { blockId: input.blockId, position: at },
+          after: { blockId: input.blockId, position: to },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.block_moved", idempotencyKey),
+        });
+
+        return lesson;
+      },
+      (existingId) => {
+        const lesson = db().authoredLessons.find((l) => l.id === existingId);
+        if (!lesson) throw new LessonAuthoringError("Duplicate write with no record.");
+        return lesson;
+      },
+    ),
+  );
+}
+
+export function removeLessonBlock(
+  actor: User,
+  input: { versionId: string; lessonCode: string; blockId: string; reason: string },
+  idempotencyKey: string,
+): AuthoredLesson {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = authoredLesson(version.id, input.lessonCode);
+        if (!lesson) throw new LessonAuthoringError("That lesson has no draft content.");
+        const block = lesson.blocks.find((b) => b.id === input.blockId);
+        if (!block) throw new LessonAuthoringError("That block is not on this lesson.");
+
+        lesson.blocks = lesson.blocks.filter((b) => b.id !== input.blockId);
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: "curriculum.block_removed",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: { blockId: block.id, kind: block.kind },
+          after: { blocks: lesson.blocks.length },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.block_removed", idempotencyKey),
         });
 
         return lesson;

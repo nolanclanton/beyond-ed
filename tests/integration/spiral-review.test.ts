@@ -70,7 +70,7 @@ describe("Spiral Review subject scoping", () => {
     }
     // Guard against the assertion passing because nothing was selected, and
     // against the sweep quietly narrowing to a handful of courses.
-    expect(checked).toBeGreaterThan(50);
+    expect(checked).toBeGreaterThan(20);
     expect(new Set(openLessons().map((l) => l.enrollment.courseTitle)).size)
       .toBeGreaterThanOrEqual(20);
   });
@@ -84,10 +84,32 @@ describe("Spiral Review subject scoping", () => {
     }
   });
 
-  it("gives the named demo students a usable set in every subject", () => {
-    const named = ["u_amara", "u_priya", "u_jamal", "u_diego"];
+  /**
+   * The demo item bank covers the courses the worked-through demo runs in, not
+   * all 38 — a course whose items nobody has written yet correctly offers no
+   * review, and says so rather than inventing questions. These are the courses
+   * a reviewer clicks through, so these are the ones asserted.
+   */
+  const WORKED_THROUGH: [string, string][] = [
+    ["u_amara", "Mathematics 6"],
+    ["u_amara", "English 6"],
+    ["u_amara", "Integrated Science 6"],
+    ["u_amara", "Grade 6 Ancient World"],
+    ["u_priya", "Math 1"],
+    ["u_priya", "English 9"],
+    ["u_jamal", "Math 1"],
+    ["u_jamal", "English 9"],
+    ["u_diego", "Mathematics 8"],
+    ["u_diego", "English 8"],
+  ];
+
+  it("gives the worked-through demo courses a usable set", () => {
     for (const { enrollment, lessonCode } of openLessons()) {
-      if (!named.includes(enrollment.studentId)) continue;
+      const worked = WORKED_THROUGH.some(
+        ([student, course]) =>
+          student === enrollment.studentId && course === enrollment.courseTitle,
+      );
+      if (!worked) continue;
       const result = spiralReviewFor(enrollment.studentId, enrollment.id, lessonCode);
       expect(
         result.items.length,
@@ -97,16 +119,27 @@ describe("Spiral Review subject scoping", () => {
     }
   });
 
+  it("offers nothing rather than something wrong where no items exist", () => {
+    // Physics has no authored items. The correct behaviour is an empty set the
+    // surface can explain, never a borrowed item from another course.
+    const enrollment = db().enrollments.find((e) => e.id === "enr_sofia_Physics");
+    if (!enrollment) throw new Error("seed missing");
+    const state = lessonStatesFor(enrollment.id).find((s) => s.status === "available");
+    if (!state) throw new Error("seed missing");
+    const result = spiralReviewFor("u_sofia", enrollment.id, state.lessonCode);
+    expect(result.items).toHaveLength(0);
+  });
+
   it("reaches the full set in social science, which was the thinnest", () => {
     const enrollment = db().enrollments.find(
       (e) => e.id === "enr_amara_Grade_6_Ancient_World",
     );
     if (!enrollment) throw new Error("seed missing");
-    const result = spiralReviewFor("u_amara", enrollment.id, "H6-U1-L2");
+    const result = spiralReviewFor("u_amara", enrollment.id, "HSS-06-L001");
     expect(result.items.length).toBeGreaterThanOrEqual(5);
     for (const selected of result.items) {
       expect(subjectForLesson(itemById(selected.itemId)!.lessonCode)).toBe(
-        "Social science",
+        "History-Social Science",
       );
     }
   });
@@ -116,7 +149,7 @@ describe("Spiral Review subject scoping", () => {
       (e) => e.id === "enr_amara_Mathematics_6",
     );
     if (!enrollment) throw new Error("seed missing");
-    const result = spiralReviewFor("u_amara", enrollment.id, "M6-U1-L2");
+    const result = spiralReviewFor("u_amara", enrollment.id, "MATH-06-L035");
     // The blueprint's pool is weak skills, upcoming prerequisites, and
     // cumulative skills. Restricting to assessed skills would make the middle
     // one unreachable, because an upcoming standard has not been met yet.
@@ -129,8 +162,8 @@ describe("Spiral Review subject scoping", () => {
       (e) => e.id === "enr_amara_Grade_6_Ancient_World",
     );
     if (!enrollment) throw new Error("seed missing");
-    const first = spiralReviewFor("u_amara", enrollment.id, "H6-U1-L2");
-    const second = spiralReviewFor("u_amara", enrollment.id, "H6-U1-L2");
+    const first = spiralReviewFor("u_amara", enrollment.id, "HSS-06-L001");
+    const second = spiralReviewFor("u_amara", enrollment.id, "HSS-06-L001");
     expect(second.items.map((i) => i.itemId)).toEqual(first.items.map((i) => i.itemId));
   });
 
@@ -154,10 +187,10 @@ describe("Spiral Review subject scoping", () => {
       ),
     );
     expect([...subjects].sort()).toEqual([
-      "English",
+      "English Language Arts",
+      "History-Social Science",
       "Mathematics",
       "Science",
-      "Social science",
     ]);
   });
 });

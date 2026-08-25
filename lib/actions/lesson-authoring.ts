@@ -7,8 +7,11 @@ import { requireUser } from "@/lib/auth/session";
 import {
   addLessonVideo,
   createDraftVersion,
+  moveLessonBlock,
+  removeLessonBlock,
   removeLessonVideo,
   removeQuizItem,
+  saveLessonBlock,
   saveLessonScript,
   saveQuizItem,
 } from "@/lib/curriculum/lesson-authoring";
@@ -62,7 +65,6 @@ const Script = z.object({
   goal: z.string().max(1000),
   independentTask: z.string().max(4000),
   successCriteria: z.array(z.string().max(500)).max(12),
-  instruction: z.array(z.string().max(4000)).max(24),
   notesOutline: z.array(z.string().max(500)).max(24),
   vocabulary: z
     .array(z.object({ term: z.string().max(120), meaning: z.string().max(600) }))
@@ -99,7 +101,6 @@ export async function saveLessonScriptAction(
       goal: String(formData.get("goal") ?? ""),
       independentTask: String(formData.get("independentTask") ?? ""),
       successCriteria: lines(formData.get("successCriteria")),
-      instruction: lines(formData.get("instruction")),
       notesOutline: lines(formData.get("notesOutline")),
       vocabulary: pairs(formData.get("vocabulary"), ["term", "meaning"]),
       workedModel: pairs(formData.get("workedModel"), ["step", "reasoning"]),
@@ -116,7 +117,6 @@ export async function saveLessonScriptAction(
         relevance: input.relevance,
         goal: input.goal,
         successCriteria: input.successCriteria,
-        instruction: input.instruction,
         vocabulary: input.vocabulary as { term: string; meaning: string }[],
         workedModel: input.workedModel as { step: string; reasoning: string }[],
         guidedPractice: input.guidedPractice,
@@ -132,6 +132,155 @@ export async function saveLessonScriptAction(
       message: `Script saved for ${lesson.lessonCode}. It reaches students when this version is published.`,
       lessonCode: lesson.lessonCode,
     };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The lesson canvas
+// ---------------------------------------------------------------------------
+
+const Block = z.object({
+  versionId: z.string().min(1),
+  lessonCode: z.string().min(1),
+  blockId: z.string().min(1).nullable(),
+  kind: z.enum([
+    "heading",
+    "text",
+    "callout",
+    "list",
+    "definition",
+    "table",
+    "image",
+    "video",
+  ]),
+  text: z.string().max(8000),
+  title: z.string().max(200),
+  tone: z.enum(["note", "important", "example", "memory"]),
+  ordered: z.boolean(),
+  items: z.array(z.string().max(1000)).max(24),
+  term: z.string().max(200),
+  meaning: z.string().max(1000),
+  caption: z.string().max(400),
+  headers: z.array(z.string().max(200)).max(6),
+  rows: z.array(z.array(z.string().max(400)).max(6)).max(24),
+  url: z.string().max(2000),
+  alt: z.string().max(600),
+  videoId: z.string().max(120),
+  reason: REASON,
+  idempotencyKey: KEY,
+});
+
+/** How each block kind is named back to the author in a result message. */
+const BLOCK_LABEL: Record<string, string> = {
+  heading: "Heading",
+  text: "Paragraph",
+  callout: "Callout",
+  list: "List",
+  definition: "Key term",
+  table: "Table",
+  image: "Image",
+  video: "Video",
+};
+
+/** `a | b | c` per row — one line per row, columns separated by a pipe. */
+function pipeRows(value: FormDataEntryValue | null): string[][] {
+  return lines(value).map((line) => line.split("|").map((cell) => cell.trim()));
+}
+
+export async function saveLessonBlockAction(
+  formData: FormData,
+): Promise<ActionResult<{ kind: string }>> {
+  try {
+    const actor = await requireUser();
+    const rawBlockId = String(formData.get("blockId") ?? "").trim();
+    const input = Block.parse({
+      versionId: formData.get("versionId"),
+      lessonCode: formData.get("lessonCode"),
+      blockId: rawBlockId === "" ? null : rawBlockId,
+      kind: formData.get("kind"),
+      text: String(formData.get("text") ?? ""),
+      title: String(formData.get("title") ?? ""),
+      tone: String(formData.get("tone") ?? "note"),
+      ordered: String(formData.get("ordered") ?? "") === "on",
+      items: lines(formData.get("items")),
+      term: String(formData.get("term") ?? ""),
+      meaning: String(formData.get("meaning") ?? ""),
+      caption: String(formData.get("caption") ?? ""),
+      headers: String(formData.get("headers") ?? "")
+        .split("|")
+        .map((h) => h.trim())
+        .filter(Boolean),
+      rows: pipeRows(formData.get("rows")),
+      url: String(formData.get("url") ?? ""),
+      alt: String(formData.get("alt") ?? ""),
+      videoId: String(formData.get("videoId") ?? ""),
+      reason: formData.get("reason"),
+      idempotencyKey: formData.get("idempotencyKey"),
+    });
+
+    const block = saveLessonBlock(actor, input, input.idempotencyKey);
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      message: `${BLOCK_LABEL[block.kind]} ${input.blockId ? "saved" : "placed on the canvas"}.`,
+      kind: block.kind,
+    };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+const MoveBlock = z.object({
+  versionId: z.string().min(1),
+  lessonCode: z.string().min(1),
+  blockId: z.string().min(1),
+  direction: z.enum(["up", "down"]),
+  reason: REASON,
+  idempotencyKey: KEY,
+});
+
+export async function moveLessonBlockAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const actor = await requireUser();
+    const input = MoveBlock.parse({
+      versionId: formData.get("versionId"),
+      lessonCode: formData.get("lessonCode"),
+      blockId: formData.get("blockId"),
+      direction: formData.get("direction"),
+      reason: formData.get("reason"),
+      idempotencyKey: formData.get("idempotencyKey"),
+    });
+    moveLessonBlock(actor, input, input.idempotencyKey);
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Moved ${input.direction}.` };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+const RemoveBlock = z.object({
+  versionId: z.string().min(1),
+  lessonCode: z.string().min(1),
+  blockId: z.string().min(1),
+  reason: REASON,
+  idempotencyKey: KEY,
+});
+
+export async function removeLessonBlockAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const actor = await requireUser();
+    const input = RemoveBlock.parse({
+      versionId: formData.get("versionId"),
+      lessonCode: formData.get("lessonCode"),
+      blockId: formData.get("blockId"),
+      reason: formData.get("reason"),
+      idempotencyKey: formData.get("idempotencyKey"),
+    });
+    removeLessonBlock(actor, input, input.idempotencyKey);
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Block removed from the canvas." };
   } catch (error) {
     return toFailure(error);
   }

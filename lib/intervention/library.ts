@@ -1,91 +1,139 @@
 /**
- * The cross-subject intervention library (blueprint §13, Appendix E).
+ * Finding the right support for a standard.
  *
- * Two document-sourced inventories feed this:
+ * The workbook links supports to instruction in one place — the prerequisite
+ * map, where every pathway lesson names the six pieces of prior learning it
+ * depends on. Some of those six are earlier lessons; the rest are supports from
+ * the bank. So "which support rebuilds the skill behind 6.RP.2 in Mathematics
+ * 6" is answered by reading the map, not by matching text.
  *
- *  1. The per-lesson intervention link in the alignment matrix — every pathway
- *     lesson names the intervention lesson connected to it, e.g.
- *     `I-M6-U1-L1 (1-2 flex days): representation and prerequisite reset`.
- *  2. The Appendix E starter inventory — named lessons with a target, a typical
- *     trigger, and the transfer evidence required.
- *
- * The blueprint states that each intervention carries estimated minutes, but it
- * does not publish per-lesson values. `TYPICAL_MINUTES` below is the midpoint of
- * the blueprint's stated 10-25 minute range and is labelled as such everywhere
- * it is shown. It is not authored curriculum metadata.
+ * That is what makes a recommendation citable: the support a teacher is offered
+ * is the one the curriculum itself names as the prerequisite for the lesson the
+ * student is stuck on (CLAUDE.md §8).
  */
 import {
   COURSES,
-  INTERVENTION_FAMILIES,
-  STARTER_INTERVENTIONS,
   courseLessons,
-  interventionId,
-  interventionTarget,
-  primaryStandards,
+  getCourse,
   standardCode,
   type CatalogCourse,
 } from "@/lib/curriculum/catalog";
+import { prerequisiteSupports } from "@/lib/curriculum/prerequisites";
 
-/**
- * Midpoint of the blueprint's stated 10-25 minute intervention range.
- * Per-lesson estimates have not been authored; every surface says so.
- */
-export const TYPICAL_MINUTES = 20;
-export const MINUTES_RANGE_LABEL = "10-25 minutes (blueprint range)";
-export const MINUTES_CAVEAT =
-  "Per-lesson time estimates have not been authored. This is the midpoint of the blueprint's 10-25 minute range.";
+import { SUPPORT_MINUTES, supportById, type BankSupport } from "./bank";
+
+/** Every support runs the same 30-minute shape, read from the bank. */
+export const TYPICAL_MINUTES = SUPPORT_MINUTES;
+export const MINUTES_LABEL = `${SUPPORT_MINUTES} minutes`;
 
 export type LibraryEntry = {
   id: string;
+  /** The basic skill the support rebuilds. */
   target: string;
-  /** Pathway lesson this support is linked to. */
+  category: string;
+  subject: string;
+  /** A pathway lesson that names this support as a prerequisite. */
   linkedLessonCode: string;
   courseTitle: string;
+  courseId: string;
+  /** Standards, in that course, whose lessons depend on this support. */
   standards: string[];
   estimatedMinutes: number;
+  trigger: string;
+  exitCriteria: string;
+  /** Why the curriculum links it here, from the prerequisite map. */
+  reason: string;
 };
 
-function buildIndex(): Map<string, LibraryEntry[]> {
-  const index = new Map<string, LibraryEntry[]>();
+type Index = {
+  /** `courseId::standard` -> supports the curriculum links to it. */
+  byStandard: Map<string, LibraryEntry[]>;
+  byId: Map<string, LibraryEntry[]>;
+};
+
+function buildIndex(): Index {
+  const byStandard = new Map<string, LibraryEntry[]>();
+  const byId = new Map<string, LibraryEntry[]>();
+
   for (const course of COURSES) {
+    /** One entry per (support, standard) pair inside this course. */
+    const seen = new Map<string, LibraryEntry>();
+
     for (const lesson of courseLessons(course)) {
-      const standards = primaryStandards(lesson).map(standardCode);
-      if (standards.length === 0) continue;
-      const entry: LibraryEntry = {
-        id: interventionId(lesson),
-        target: interventionTarget(lesson),
-        linkedLessonCode: lesson.code,
-        courseTitle: course.title,
-        standards,
-        estimatedMinutes: TYPICAL_MINUTES,
-      };
-      for (const s of standards) {
-        index.set(s, [...(index.get(s) ?? []), entry]);
+      const standard = standardCode(lesson.primaryStandard);
+      if (!standard) continue;
+
+      for (const prerequisite of prerequisiteSupports(lesson.code)) {
+        const support = supportById(prerequisite.id);
+        if (!support) continue;
+        // A support may only be offered where the bank says it can return.
+        if (!support.returnCourseIds.includes(course.id)) continue;
+
+        const key = `${support.id}::${standard}`;
+        if (seen.has(key)) continue;
+
+        const entry: LibraryEntry = {
+          id: support.id,
+          target: support.skill,
+          category: support.category,
+          subject: support.subject,
+          linkedLessonCode: lesson.code,
+          courseTitle: course.title,
+          courseId: course.id,
+          standards: [standard],
+          estimatedMinutes: SUPPORT_MINUTES,
+          trigger: support.trigger,
+          exitCriteria: support.exitCriteria,
+          reason: prerequisite.reason,
+        };
+        seen.set(key, entry);
+
+        const standardKey = `${course.id}::${standard}`;
+        byStandard.set(standardKey, [...(byStandard.get(standardKey) ?? []), entry]);
+        byId.set(support.id, [...(byId.get(support.id) ?? []), entry]);
       }
     }
   }
-  return index;
+
+  return { byStandard, byId };
 }
 
-let cached: Map<string, LibraryEntry[]> | null = null;
-
-function index(): Map<string, LibraryEntry[]> {
+let cached: Index | null = null;
+function index(): Index {
   if (!cached) cached = buildIndex();
   return cached;
 }
 
-/** Supports linked to a standard, nearest course first. */
+/**
+ * Supports the curriculum links to a standard.
+ *
+ * With a course title, the answer is scoped to that course — the same standard
+ * is taught in more than one course, and a support that cannot return into the
+ * student's course is not an option for them.
+ */
 export function supportsForStandard(
   standard: string,
   courseTitle?: string,
 ): LibraryEntry[] {
-  const all = index().get(standardCode(standard)) ?? [];
-  if (!courseTitle) return all;
-  return [...all].sort((a, b) => {
-    const aScore = a.courseTitle === courseTitle ? 0 : 1;
-    const bScore = b.courseTitle === courseTitle ? 0 : 1;
-    return aScore - bScore || a.id.localeCompare(b.id);
-  });
+  const code = standardCode(standard);
+  if (courseTitle) {
+    const course = getCourse(courseTitle);
+    if (!course) return [];
+    return [...(index().byStandard.get(`${course.id}::${code}`) ?? [])].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    );
+  }
+  const out: LibraryEntry[] = [];
+  const seen = new Set<string>();
+  for (const [key, entries] of index().byStandard) {
+    if (!key.endsWith(`::${code}`)) continue;
+    for (const entry of entries) {
+      if (seen.has(`${entry.id}::${entry.courseId}`)) continue;
+      seen.add(`${entry.id}::${entry.courseId}`);
+      out.push(entry);
+    }
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /** The single best-matched support for a standard within a course. */
@@ -102,13 +150,14 @@ export function searchLibrary(query: string, limit = 40): LibraryEntry[] {
   if (q.length === 0) return [];
   const seen = new Set<string>();
   const out: LibraryEntry[] = [];
-  for (const entries of index().values()) {
-    for (const e of entries) {
-      if (seen.has(e.id)) continue;
-      const haystack = `${e.id} ${e.target} ${e.courseTitle} ${e.standards.join(" ")}`.toLowerCase();
+  for (const entries of index().byId.values()) {
+    for (const entry of entries) {
+      if (seen.has(entry.id)) continue;
+      const haystack =
+        `${entry.id} ${entry.target} ${entry.category} ${entry.courseTitle} ${entry.standards.join(" ")}`.toLowerCase();
       if (haystack.includes(q)) {
-        seen.add(e.id);
-        out.push(e);
+        seen.add(entry.id);
+        out.push(entry);
         if (out.length >= limit) return out;
       }
     }
@@ -116,35 +165,36 @@ export function searchLibrary(query: string, limit = 40): LibraryEntry[] {
   return out;
 }
 
+/**
+ * A support by id, as a library entry.
+ *
+ * Falls back to the bank record itself when the support is not linked into any
+ * course lesson, so an assigned plan always renders what it is about.
+ */
 export function entryById(id: string): LibraryEntry | undefined {
-  for (const entries of index().values()) {
-    const found = entries.find((e) => e.id === id);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-/** Appendix E starter lessons, with the subject their heading names. */
-export function starterLessons() {
-  return STARTER_INTERVENTIONS.map((s) => ({
-    ...s,
-    subject: s.subjectHeading.replace(/ starter lessons$/i, ""),
-  }));
-}
-
-export function families() {
-  return INTERVENTION_FAMILIES;
-}
-
-export function familyTotals() {
-  const bySubject = new Map<string, number>();
-  for (const f of INTERVENTION_FAMILIES) {
-    bySubject.set(f.subject, (bySubject.get(f.subject) ?? 0) + f.lessons);
-  }
+  const linked = index().byId.get(id);
+  if (linked && linked.length > 0) return linked[0];
+  const support = supportById(id);
+  if (!support) return undefined;
   return {
-    bySubject: [...bySubject.entries()].map(([subject, lessons]) => ({ subject, lessons })),
-    total: INTERVENTION_FAMILIES.reduce((n, f) => n + f.lessons, 0),
+    id: support.id,
+    target: support.skill,
+    category: support.category,
+    subject: support.subject,
+    linkedLessonCode: "",
+    courseTitle: "",
+    courseId: "",
+    standards: support.standardsSupport,
+    estimatedMinutes: SUPPORT_MINUTES,
+    trigger: support.trigger,
+    exitCriteria: support.exitCriteria,
+    reason: "",
   };
+}
+
+/** The bank record behind a library entry, when a surface needs the full text. */
+export function supportRecord(id: string): BankSupport | undefined {
+  return supportById(id);
 }
 
 export type { CatalogCourse };

@@ -10,7 +10,7 @@ function row(partial: Partial<EvidenceRecord> & { id: string }): EvidenceRecord 
     studentId: "u_test",
     enrollmentId: "enr_test",
     courseVersionId: "cv_test",
-    lessonCode: "M6-U1-L1",
+    lessonCode: "MATH-06-L020",
     stage: "Exit Ticket",
     standard: "6.RP.1",
     skill: "6.RP.1",
@@ -36,7 +36,7 @@ function context(over: Partial<RecommendContext> = {}): RecommendContext {
     enrollmentId: "enr_test",
     courseTitle: "Mathematics 6",
     courseVersionId: "cv_test",
-    currentLessonCode: "M6-U1-L2",
+    currentLessonCode: "MATH-06-L035",
     currentStage: 5,
     upcomingStandards: ["6.RP.1", "6.RP.2"],
     options: {
@@ -94,7 +94,7 @@ describe("recommendation engine", () => {
     for (const r of out) {
       expect(r.triggerEvidenceIds.length).toBeGreaterThan(0);
       expect(r.triggerSummary.length).toBeGreaterThan(0);
-      expect(r.returnLessonCode).toBe("M6-U1-L2");
+      expect(r.returnLessonCode).toBe("MATH-06-L035");
       expect(r.returnStage).toBe(5);
       expect(r.ruleVersion).toBe(RULE_VERSIONS.recommend);
     }

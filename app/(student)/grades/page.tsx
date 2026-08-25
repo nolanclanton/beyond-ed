@@ -295,7 +295,7 @@ export default async function GradesPage({
                       <li key={unit.id} className="px-5 py-4">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <p className="text-sm font-semibold text-ink">
-                            Unit {unit.id}. {unit.name}
+                            Unit {unit.order}. {unit.title}
                           </p>
                           <p className="text-sm font-medium text-ink-muted">
                             {possible === 0

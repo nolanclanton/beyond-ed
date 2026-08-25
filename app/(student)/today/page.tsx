@@ -192,7 +192,7 @@ export default async function TodayPage() {
                       {progress.current.topic}
                     </Link>
                     <span className="block text-xs">
-                      Unit {progress.current.unit.id}: {progress.current.unit.name}
+                      Unit {progress.current.unit.order}: {progress.current.unit.title}
                     </span>
                   </p>
                 ) : (
@@ -285,13 +285,13 @@ function PrimaryAction({ action }: { action: PriorityAction }) {
               items={[
                 {
                   label: "Unit",
-                  value: `${action.location.unit.id} — ${action.location.unit.name}`,
+                  value: `Unit ${action.location.unit.order} — ${action.location.unit.title}`,
                 },
                 {
                   label: "Where you are in the unit",
                   value: position
                     ? `Lesson ${position.index} of ${position.total}`
-                    : action.location.instructionalSection,
+                    : action.location.lessonType,
                 },
                 {
                   label: "What you will show",

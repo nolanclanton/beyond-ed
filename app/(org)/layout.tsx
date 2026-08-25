@@ -17,12 +17,7 @@ export default async function OrgLayout({ children }: { children: ReactNode }) {
       user={user}
       nav={
         user.role === "curriculum_author"
-          ? ORG_NAV.filter(
-              (n) =>
-                n.href === "/org" ||
-                n.href === "/org/curriculum" ||
-                n.href === "/org/curriculum/build",
-            )
+          ? ORG_NAV.filter((n) => n.href === "/org" || n.href.startsWith("/org/curriculum"))
           : ORG_NAV
       }
       contextLine={

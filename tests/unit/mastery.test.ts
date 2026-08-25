@@ -9,7 +9,7 @@ function row(partial: Partial<EvidenceRecord> & { id: string }): EvidenceRecord 
     studentId: "u_test",
     enrollmentId: "enr_test",
     courseVersionId: "cv_test",
-    lessonCode: "M6-U1-L1",
+    lessonCode: "MATH-06-L020",
     stage: "Exit Ticket",
     standard: "6.RP.2",
     skill: "6.RP.2",
@@ -65,18 +65,18 @@ describe("mastery estimate", () => {
 
     const varied = estimateSkill("6.RP.2", [
       row({ id: "e1" }),
-      row({ id: "e2", lessonCode: "M6-U1-L2", source: "spiral_review" }),
-      row({ id: "e3", lessonCode: "M6-U1-L2" }),
+      row({ id: "e2", lessonCode: "MATH-06-L035", source: "spiral_review" }),
+      row({ id: "e3", lessonCode: "MATH-06-L035" }),
     ]);
     expect(varied.confidence).toBe("moderate");
 
     const withTransfer = estimateSkill("6.RP.2", [
       row({ id: "e1" }),
-      row({ id: "e2", lessonCode: "M6-U1-L2", source: "spiral_review" }),
-      row({ id: "e3", lessonCode: "M6-U1-L2" }),
+      row({ id: "e2", lessonCode: "MATH-06-L035", source: "spiral_review" }),
+      row({ id: "e3", lessonCode: "MATH-06-L035" }),
       row({ id: "e4", source: "readiness_check" }),
-      row({ id: "e5", lessonCode: "M6-U1-L3" }),
-      row({ id: "e6", source: "transfer_check", lessonCode: "M6-U1-L3" }),
+      row({ id: "e5", lessonCode: "MATH-06-L036" }),
+      row({ id: "e6", source: "transfer_check", lessonCode: "MATH-06-L036" }),
     ]);
     expect(withTransfer.confidence).toBe("high");
   });

@@ -15,9 +15,45 @@
  * (CLAUDE.md §2 forbids `UPDATE grade_records`). The system never changes a
  * grade on its own — only a teacher does, and every change is audited.
  */
+import { locateLesson, lessonPosition } from "@/lib/curriculum/catalog";
 import { db } from "@/lib/db/store";
 import { RULE_VERSIONS } from "@/lib/rules/versions";
 import type { GradeCategory, GradeRecord } from "@/lib/db/types";
+
+/**
+ * The two gradebook categories, and which lessons land in each.
+ *
+ * Every unit runs the same fifteen-lesson arc, and two of its positions are
+ * where a result is judged rather than checked: the formative checkpoint at 8
+ * and the performance task at 15. Everything else is a knowledge check taken
+ * along the way. Basing the split on the arc rather than on a lesson-code
+ * pattern means it holds for every course in the catalog, and it moves only if
+ * the curriculum itself moves.
+ *
+ * The weights are a demo default, not an adopted grading policy.
+ */
+export const GRADED_ARC_POSITIONS = [8, 15] as const;
+
+export const GRADE_CATEGORY_SHAPE = [
+  { suffix: "KC", name: "Knowledge checks", weight: 0.4 },
+  { suffix: "AS", name: "Checkpoints and performance tasks", weight: 0.6 },
+] as const;
+
+/** The category suffix a lesson's result belongs under. */
+export function categorySuffixFor(lessonCode: string): "KC" | "AS" {
+  const at = locateLesson(lessonCode);
+  if (!at) return "KC";
+  return GRADED_ARC_POSITIONS.includes(
+    lessonPosition(at.lesson) as (typeof GRADED_ARC_POSITIONS)[number],
+  )
+    ? "AS"
+    : "KC";
+}
+
+/** A course's grade-category id for a lesson. One place builds this string. */
+export function categoryIdFor(courseTitle: string, lessonCode: string): string {
+  return `gc_${courseTitle.replace(/[^A-Za-z0-9]+/g, "_")}_${categorySuffixFor(lessonCode)}`;
+}
 
 export const DEFAULT_SCALE = [
   { min: 90, letter: "A" },

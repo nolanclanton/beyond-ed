@@ -24,10 +24,10 @@ describe("annual capacity contract", () => {
   it("covers all four subjects", () => {
     const subjects = new Set(COURSES.map((c) => c.subject));
     expect([...subjects].sort()).toEqual([
-      "English",
+      "English Language Arts",
+      "History-Social Science",
       "Mathematics",
       "Science",
-      "Social science",
     ]);
   });
 

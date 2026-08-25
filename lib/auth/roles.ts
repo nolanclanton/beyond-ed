@@ -49,8 +49,8 @@ export const ROLE_PRESENTATION: Record<
   curriculum_author: {
     label: "Curriculum author",
     scope: "Authorization, not hierarchy",
-    home: "/org/curriculum",
+    home: "/org/curriculum/courses",
     summary:
-      "Drafts, reviews, approves, publishes, and retires curriculum versions.",
+      "Designs lessons, and drafts, reviews, approves, publishes, and retires curriculum versions.",
   },
 };

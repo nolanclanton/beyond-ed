@@ -64,7 +64,7 @@ export default async function LearnPage() {
                             {focusForLesson(location.lesson.code)?.description}
                           </p>
                           <p className="mt-1 text-xs text-ink-muted">
-                            Unit {location.unit.id}: {location.unit.name}
+                            Unit {location.unit.order}: {location.unit.title}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-4">
                             <Link

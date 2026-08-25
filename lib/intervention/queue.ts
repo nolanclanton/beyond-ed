@@ -30,8 +30,15 @@ import { visibleStudentIds } from "@/lib/auth/scope";
 
 import { bestSupportFor, TYPICAL_MINUTES } from "./library";
 
-/** How far ahead the engine looks for upcoming prerequisite dependencies. */
-const LOOKAHEAD_LESSONS = 5;
+/**
+ * How far ahead the engine looks for upcoming prerequisite dependencies.
+ *
+ * Ten lessons, which is ten course days — about two school weeks, and close to
+ * one planning cycle. The window is stated in lessons because every lesson in
+ * the catalog is exactly one thirty-minute course day, so the two are the same
+ * count.
+ */
+const LOOKAHEAD_LESSONS = 10;
 
 export function currentLessonFor(enrollment: Enrollment): string | null {
   const states = lessonStatesFor(enrollment.id);
@@ -217,8 +224,8 @@ export function actionQueue(actor: User): QueueItem[] {
         recommendation,
         student,
         courseTitle: enrollment.courseTitle,
-        lessonTitle: found?.lesson.sequence ?? recommendation.currentLessonCode,
-        unitName: found?.unit.name ?? "",
+        lessonTitle: found?.lesson.title ?? recommendation.currentLessonCode,
+        unitName: found?.unit.title ?? "",
       });
     }
   }

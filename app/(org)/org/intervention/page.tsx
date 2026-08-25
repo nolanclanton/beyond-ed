@@ -10,7 +10,12 @@ import {
   ScrollX,
   SectionHeading,
 } from "@/lib/design/primitives";
-import { families, familyTotals, starterLessons } from "@/lib/intervention/library";
+import {
+  SUPPORTS,
+  SUPPORT_MINUTES,
+  supportCategories,
+  supportCountBySubject,
+} from "@/lib/intervention/bank";
 import { INTERVENTION_STATUSES, INTERVENTION_STATUS_PRESENTATION } from "@/lib/intervention/status";
 import { INTERVENTION_TRANSITIONS } from "@/lib/intervention/transitions";
 import {
@@ -36,7 +41,8 @@ export const metadata: Metadata = {
 export default async function OrgInterventionPage() {
   await requireUser();
   const d = db();
-  const totals = familyTotals();
+  const bySubject = supportCountBySubject();
+  const categories = supportCategories();
   const plans = d.interventions;
 
   const recurrence = new Map<string, number>();
@@ -177,51 +183,51 @@ export default async function OrgInterventionPage() {
       <section aria-labelledby="library" className="mt-10">
         <SectionHeading
           id="library"
-          hint={`${totals.total} lessons across ${families().length} families. Counts are governed content targets, not a requirement to assign more support.`}
+          hint={`${SUPPORTS.length} supports, ${SUPPORT_MINUTES} minutes each. Reusable across courses — the 40-day reserve is capacity, not content, which is why a course cannot spend it.`}
         >
-          Approved content
+          The support bank
         </SectionHeading>
         <Card>
-          <CardHeader title="Intervention families" hint="From the blueprint's cross-subject library." />
+          <CardHeader
+            title="What the bank holds"
+            hint={bySubject.map((s) => `${s.subject} ${s.supports}`).join(" · ")}
+          />
           <ScrollX>
-            <table className="w-full min-w-[46rem] border-collapse text-sm">
+            <table className="w-full min-w-[52rem] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-line text-left">
                   <th scope="col" className="px-5 py-3 font-semibold text-ink">Subject</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Family</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Lessons</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Representative targets</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Category</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Supports</th>
+                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Basic skills</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {families().map((f) => (
-                  <tr key={`${f.subject}-${f.family}`}>
+                {categories.map((group) => (
+                  <tr key={`${group.subject}-${group.category}`}>
                     <th scope="row" className="px-5 py-2.5 text-left font-medium text-ink">
-                      {f.subject}
+                      {group.subject}
                     </th>
-                    <td className="px-5 py-2.5 text-xs text-ink">{f.family}</td>
-                    <td className="px-5 py-2.5 text-ink-muted">{f.lessons}</td>
-                    <td className="px-5 py-2.5 text-xs text-ink-muted">{f.targets}</td>
+                    <td className="px-5 py-2.5 text-xs text-ink">{group.category}</td>
+                    <td className="px-5 py-2.5 text-ink-muted">{group.supports.length}</td>
+                    <td className="px-5 py-2.5 text-xs text-ink-muted">
+                      {group.supports.map((s) => s.skill).join(" · ")}
+                    </td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-line-strong font-semibold">
                   <th scope="row" className="px-5 py-2.5 text-left text-ink">
-                    Initial library target
+                    Total
                   </th>
                   <td className="px-5 py-2.5" />
-                  <td className="px-5 py-2.5 text-ink">{totals.total}</td>
+                  <td className="px-5 py-2.5 text-ink">{SUPPORTS.length}</td>
                   <td className="px-5 py-2.5 text-xs text-ink-muted">
-                    {totals.bySubject.map((s) => `${s.subject} ${s.lessons}`).join(" · ")}
+                    Each names its own diagnostic trigger and exit criterion.
                   </td>
                 </tr>
               </tbody>
             </table>
           </ScrollX>
-          <p className="border-t border-line px-5 py-3 text-xs text-ink-muted">
-            {starterLessons().length} named starter lessons carry the minimum
-            metadata each library lesson requires: target, typical trigger, and
-            required transfer evidence.
-          </p>
         </Card>
       </section>
 

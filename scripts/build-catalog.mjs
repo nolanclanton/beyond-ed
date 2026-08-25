@@ -1,254 +1,482 @@
 /**
- * Generates `lib/curriculum/data/catalog.json` from `docs/blueprint.md`.
+ * Generates the curriculum data in `lib/curriculum/data/` from the curriculum
+ * architecture workbook.
  *
- * CLAUDE.md §14 forbids inventing curriculum data. Every course, unit, lesson,
- * standard code, assessment id, and intervention id in the generated catalog is
- * read out of the blueprint appendices — nothing is authored here.
+ *   node scripts/build-catalog.mjs
  *
- * Run: node scripts/build-catalog.mjs
+ * The workbook at `docs/curriculum/curriculum-architecture.xlsx` is the source
+ * of truth for the instructional structure: the course taxonomy, the units, the
+ * 5,130-lesson spine, the standards crosswalk, the reusable intervention bank,
+ * the per-lesson prerequisite map, and the concept dependency graph.
+ *
+ * CLAUDE.md §14 forbids inventing curriculum data, so nothing is authored here.
+ * Every string this script writes is read out of a cell. What it does add is
+ * SHAPE — parsing a semicolon list into an array, a "3 min retrieval | …" cell
+ * into phases, and interning the repeated strings so the same fact is not
+ * stored 5,130 times.
+ *
+ * Two identifiers are derived rather than read, and both are system record ids
+ * rather than curriculum: a lesson's assessment record (`A-<lesson id>`) and a
+ * course's slug. Neither carries meaning the workbook does not already state.
+ *
+ * The script validates before it writes and exits non-zero on any structural
+ * violation, so a workbook that does not hold together cannot become a build.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { openWorkbook, num, list } from "./xlsx.mjs";
 
-const SRC = "docs/blueprint.md";
-const OUT = "lib/curriculum/data/catalog.json";
+const SOURCE = "docs/curriculum/curriculum-architecture.xlsx";
+const OUT_DIR = "lib/curriculum/data";
 
-const lines = readFileSync(SRC, "utf8").split("\n");
+const CONTRACT = {
+  pathwayDays: 135,
+  interventionCapacity: 40,
+  annualTotal: 175,
+  unitsPerCourse: 9,
+  lessonsPerUnit: 15,
+};
 
-const COL_RULE = /^\s*-{3,}(?:\s+-{3,})+\s*$/;
-const FULL_RULE = /^\s*-{3,}\s*$/;
-
-/** Column ranges [start,end) from a pandoc simple-table ruler line. */
-function columnsFrom(rule) {
-  const ranges = [];
-  const re = /-{3,}/g;
-  let m;
-  while ((m = re.exec(rule)) !== null) ranges.push([m.index, m.index + m[0].length]);
-  // Widen every column to the start of the next one so overflowing cells stay put.
-  return ranges.map(([s], i) => [s, i + 1 < ranges.length ? ranges[i + 1][0] : Infinity]);
+const problems = [];
+function require(condition, message) {
+  if (!condition) problems.push(message);
 }
 
-function clean(s) {
-  return s
-    .replace(/\*\*/g, "")
-    .replace(/\\(?=\s|$)/g, " ")
-    .replace(/\\([[\]*|+])/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
+// ---------------------------------------------------------------------------
+// Read
+// ---------------------------------------------------------------------------
+
+const wb = openWorkbook(SOURCE);
+
+const catalogRows = wb.tableOf("Course Catalog");
+const pathwayRows = wb.tableOf("Pathways");
+const unitRows = wb.tableOf("Units");
+const lessonRows = wb.tableOf("Lesson Sequence");
+const standardRows = wb.tableOf("Standards Crosswalk");
+const interventionRows = wb.tableOf("Intervention Bank");
+const prerequisiteRows = wb.tableOf("Prerequisite Map");
+const conceptRows = wb.tableOf("Concept Edges");
+const sourceRows = wb.tableOf("Sources");
+
+const readmeRows = wb.rowsOf("README");
+const builtAt =
+  readmeRows.find((row) => row[0] === "Last built")?.[1] ?? "";
+
+/** `"3 min retrieval | 5 min model"` -> `[{minutes:3,label:"retrieval"},…]`. */
+function phases(cell) {
+  return list(cell, "|").map((part) => {
+    const match = /^(\d+)\s*min\s+(.*)$/i.exec(part);
+    if (!match) throw new Error(`Unparseable lesson-structure phase: "${part}"`);
+    return { minutes: Number(match[1]), label: match[2].trim() };
+  });
 }
+
+// ---------------------------------------------------------------------------
+// Courses, units, lessons
+// ---------------------------------------------------------------------------
+
+const unitsByCourse = new Map();
+for (const row of unitRows) {
+  const unit = {
+    id: row.Unit_ID,
+    order: num(row.Unit_Number, `Units.${row.Unit_ID}.Unit_Number`),
+    title: row.Unit_Title,
+    essentialQuestion: row.Essential_Question,
+    concepts: list(row.Concepts, "|"),
+    pathwayDays: num(row.Lesson_Count, `Units.${row.Unit_ID}.Lesson_Count`),
+    startDay: num(row.Start_Day, `Units.${row.Unit_ID}.Start_Day`),
+    endDay: num(row.End_Day, `Units.${row.Unit_ID}.End_Day`),
+    standards: list(row.Unit_Standards),
+    lessons: [],
+  };
+  const bucket = unitsByCourse.get(row.Course_ID) ?? [];
+  bucket.push(unit);
+  unitsByCourse.set(row.Course_ID, bucket);
+}
+
+const unitsById = new Map(
+  [...unitsByCourse.values()].flat().map((unit) => [unit.id, unit]),
+);
+
+/** The 30-minute shape. Identical on every pathway lesson, so it is stored once. */
+let lessonStructure = null;
 
 /**
- * Reads the pandoc simple table whose column ruler is at `i`.
+ * The 15-lesson unit arc.
  *
- * In this dialect the header sits ABOVE the ruler and the body below it, so the
- * header is recovered by scanning back to the table's top rule.
- * Returns { header: string[], rows: string[][], end: number }.
+ * Every unit in every course runs the same instructional sequence: launch and
+ * diagnose, then vocabulary, explicit instruction, and so on to the performance
+ * task. Lesson type and the evidence it produces are therefore a function of a
+ * lesson's POSITION in its unit, not of the lesson — so the arc is stored once
+ * as fifteen rows instead of 5,130 times, and any lesson that departs from it
+ * fails the build rather than being written out silently.
  */
-function readTable(i) {
-  const cols = columnsFrom(lines[i]);
-  const slice = (line) =>
-    cols.map(([s, e]) => line.slice(s, e === Infinity ? undefined : e).trim());
+const lessonArc = [];
+const lessonsByCode = new Map();
 
-  const headerParts = cols.map(() => []);
-  for (let k = i - 1; k >= 0; k--) {
-    const line = lines[k];
-    if (FULL_RULE.test(line) || COL_RULE.test(line) || line.trim() === "") break;
-    slice(line).forEach((piece, c) => {
-      if (piece) headerParts[c].unshift(piece);
-    });
-  }
-  const header = headerParts.map((parts) => clean(parts.join(" ")));
+for (const row of lessonRows) {
+  const structure = phases(row["30_Minute_Structure"]);
+  if (lessonStructure === null) lessonStructure = structure;
+  require(
+    JSON.stringify(structure) === JSON.stringify(lessonStructure),
+    `${row.Lesson_ID}: lesson structure differs from the rest of the spine.`,
+  );
 
-  const rows = [];
-  let cur = null;
-  let j = i + 1;
-  for (; j < lines.length; j++) {
-    const line = lines[j];
-    if (FULL_RULE.test(line) || COL_RULE.test(line)) break;
-    if (line.trim() === "") {
-      if (cur) rows.push(cur);
-      cur = null;
-      continue;
-    }
-    if (!cur) cur = cols.map(() => []);
-    cols.forEach(([s, e], c) => {
-      const piece = line.slice(s, e === Infinity ? undefined : e);
-      if (piece && piece.trim()) cur[c].push(piece.trim());
-    });
+  const unit = unitsById.get(row.Unit_ID);
+  if (!unit) {
+    problems.push(`${row.Lesson_ID}: references unknown unit ${row.Unit_ID}.`);
+    continue;
   }
-  if (cur) rows.push(cur);
-  return {
-    header,
-    rows: rows.map((r) => r.map((parts) => clean(parts.join(" ")))),
-    end: j,
+
+  const position = num(row.Lesson_in_Unit, `Lesson Sequence.${row.Lesson_ID}.Lesson_in_Unit`);
+  const day = num(row.Day, `Lesson Sequence.${row.Lesson_ID}.Day`);
+  require(
+    ((day - 1) % CONTRACT.lessonsPerUnit) + 1 === position,
+    `${row.Lesson_ID}: day ${day} does not sit at position ${position} of its unit.`,
+  );
+
+  const stage = lessonArc[position - 1];
+  if (!stage) {
+    lessonArc[position - 1] = {
+      position,
+      type: row.Lesson_Type,
+      evidence: row.Evidence_of_Learning,
+    };
+  } else {
+    require(
+      stage.type === row.Lesson_Type && stage.evidence === row.Evidence_of_Learning,
+      `${row.Lesson_ID}: position ${position} is "${row.Lesson_Type}" here but "${stage.type}" elsewhere in the spine.`,
+    );
+  }
+
+  const lesson = {
+    code: row.Lesson_ID,
+    day,
+    title: row.Lesson_Title,
+    objective: row.Learning_Objective,
+    primaryStandard: row.Primary_Standard,
+    // The workbook repeats the primary standard in the supporting list; a
+    // standard supporting itself is noise on every surface that shows it.
+    supportingStandards: list(row.Supporting_Standards).filter(
+      (code) => code !== row.Primary_Standard,
+    ),
+    practice: list(row.Practice_or_Literacy),
   };
+  unit.lessons.push(lesson);
+  lessonsByCode.set(lesson.code, { lesson, courseId: row.Course_ID, unitId: unit.id });
 }
 
-// ---------------------------------------------------------------------------
-// Walk the document, tracking heading context.
-// ---------------------------------------------------------------------------
-const budgets = [];        // { course, unit, unitName, pathwayDays }
-const matrix = [];         // { course, unitNumber, unitName, unitDays, ...lesson }
-const starters = [];       // { lessonId, target, trigger, transfer, subject }
-const families = [];       // { subject, family, lessons, targets }
-const courseHeadlines = {}; // course -> stats line from Appendix F
+const SUBJECT_ORDER = [
+  "Mathematics",
+  "English Language Arts",
+  "Science",
+  "History-Social Science",
+];
 
-let h1 = "", h2 = "", h3 = "";
-
-for (let i = 0; i < lines.length; i++) {
-  const line = lines[i];
-  if (line.startsWith("# ")) { h1 = line.slice(2).trim(); h2 = ""; h3 = ""; continue; }
-  if (line.startsWith("## ")) { h2 = line.slice(3).trim(); h3 = ""; continue; }
-  if (line.startsWith("### ")) { h3 = line.slice(4).trim(); continue; }
-
-  if (h1.startsWith("Appendix F") && h2 && /^\d+ core lesson days/.test(line.trim())) {
-    courseHeadlines[h2] = clean(line);
-    continue;
-  }
-
-  if (!COL_RULE.test(line)) continue;
-  const { header: rawHeader, rows: body, end } = readTable(i);
-  i = end - 1;
-  if (body.length === 0) continue;
-
-  const header = rawHeader.map((c) => c.toLowerCase());
-
-  // Appendix A-D: course day budgets. The appendix heading names the subject.
-  if (h1.startsWith("Appendix") && header[0] === "course" && header[1] === "unit") {
-    const subject = /mathematics/i.test(h1)
-      ? "Mathematics"
-      : /english/i.test(h1)
-        ? "English"
-        : /social science/i.test(h1)
-          ? "Social science"
-          : /science/i.test(h1)
-            ? "Science"
-            : "Unknown";
-    for (const r of body) {
-      if (!r[0] && !r[2]) continue;
-      const course = r[0] || h2;
-      if (/course total/i.test(r[2])) continue;
-      budgets.push({
-        course,
-        subject,
-        unit: r[1],
-        unitName: r[2],
-        pathwayDays: Number(r[3]),
-      });
-    }
-    continue;
-  }
-
-  // Appendix F: standards-to-lesson alignment.
-  if (h1.startsWith("Appendix F") && header[0].startsWith("lesson /")) {
-    const unitMatch = /^Unit ([A-Za-z0-9]+)\.\s*(.*?)\s*-\s*(\d+) core days$/.exec(h3);
-    if (!unitMatch) continue;
-    for (const r of body) {
-      const cell = r[0];
-      if (!cell) continue;
-      const m = /^([A-Za-z0-9-]+)\s+Days?\s+([0-9-]+)\s*\((\d+)\)$/.exec(cell)
-        || /^([A-Za-z0-9-]+)\s+Days?\s+([0-9-]+)$/.exec(cell);
-      if (!m) continue;
-      matrix.push({
-        course: h2,
-        unitNumber: unitMatch[1],
-        unitName: unitMatch[2],
-        unitDays: Number(unitMatch[3]),
-        lessonCode: m[1],
-        dayRange: m[2],
-        days: m[3] ? Number(m[3]) : 1,
-        sequence: r[1],
-        standards: r[2],
-        assessment: r[3],
-        intervention: r[4],
-      });
-    }
-    continue;
-  }
-
-  // Appendix E: starter intervention lessons.
-  if (h1.startsWith("Appendix E") && header[0].startsWith("lesson id")) {
-    for (const r of body) {
-      if (!r[0]) continue;
-      starters.push({
-        lessonId: r[0],
-        target: r[1],
-        trigger: r[2],
-        transfer: r[3],
-        subjectHeading: h2,
-      });
-    }
-    continue;
-  }
-
-  // Section 13: cross-subject intervention library.
-  if (h1.startsWith("13.") && header[0] === "subject" && header[1].startsWith("intervention")) {
-    for (const r of body) {
-      if (!r[0]) continue;
-      families.push({
-        subject: r[0],
-        family: r[1],
-        lessons: Number(r[2]),
-        targets: r[3],
-      });
-    }
-    continue;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Fold into courses.
-// ---------------------------------------------------------------------------
-const byCourse = new Map();
-for (const b of budgets) {
-  if (!byCourse.has(b.course))
-    byCourse.set(b.course, { title: b.course, subject: b.subject, order: byCourse.size, units: new Map() });
-  const c = byCourse.get(b.course);
-  if (c.units.has(b.unit)) continue;
-  c.units.set(b.unit, {
-    id: b.unit,
-    order: c.units.size,
-    name: b.unitName,
-    pathwayDays: b.pathwayDays,
-    lessons: [],
-  });
-}
-for (const m of matrix) {
-  const c = byCourse.get(m.course);
-  if (!c) continue;
-  const u = c.units.get(m.unitNumber);
-  if (!u) continue;
-  u.lessons.push({
-    code: m.lessonCode,
-    dayRange: m.dayRange,
-    days: m.days,
-    sequence: m.sequence,
-    standards: m.standards,
-    assessment: m.assessment,
-    intervention: m.intervention,
-  });
-}
-
-const courses = [...byCourse.values()].map((c) => {
-  const units = [...c.units.values()].sort((a, b) => a.order - b.order);
+const courses = catalogRows.map((row) => {
+  const units = (unitsByCourse.get(row.Course_ID) ?? []).sort((a, b) => a.order - b.order);
+  for (const unit of units) unit.lessons.sort((a, b) => a.day - b.day);
   return {
-    title: c.title,
-    subject: c.subject,
-    order: c.order,
-    headline: courseHeadlines[c.title] ?? null,
-    pathwayDays: units.reduce((n, u) => n + u.pathwayDays, 0),
+    id: row.Course_ID,
+    title: row.Course_Name,
+    subject: row.Subject,
+    gradeBand: row.Grade_or_Band,
+    order: num(row.Pathway_Order, `Course Catalog.${row.Course_ID}.Pathway_Order`),
+    standardsModel: row.Standards_Model,
+    pathwayDays: num(row.Pathway_Days, `Course Catalog.${row.Course_ID}.Pathway_Days`),
+    interventionCapacity: num(
+      row.Intervention_Capacity,
+      `Course Catalog.${row.Course_ID}.Intervention_Capacity`,
+    ),
     units,
   };
 });
 
-const catalog = { courses, starterInterventions: starters, interventionFamilies: families };
-writeFileSync(OUT, JSON.stringify(catalog, null, 1));
+courses.sort(
+  (a, b) =>
+    SUBJECT_ORDER.indexOf(a.subject) - SUBJECT_ORDER.indexOf(b.subject) ||
+    a.order - b.order,
+);
 
-const bad = courses.filter((c) => c.pathwayDays !== 135);
-console.log(`matrix rows: ${matrix.length}`);
-console.log(`budget rows: ${budgets.length}`);
-console.log(`courses: ${courses.length}`);
-console.log(`units: ${courses.reduce((n, c) => n + c.units.length, 0)}`);
-console.log(`lessons: ${courses.reduce((n, c) => n + c.units.reduce((m, u) => m + u.lessons.length, 0), 0)}`);
-console.log(`starter interventions: ${starters.length}`);
-console.log(`intervention families: ${families.length} (${families.reduce((n, f) => n + f.lessons, 0)} lessons)`);
-console.log(bad.length ? `NOT 135: ${bad.map((c) => `${c.title}=${c.pathwayDays}`).join(", ")}` : "every course totals 135 pathway days");
+// ---------------------------------------------------------------------------
+// Standards crosswalk
+// ---------------------------------------------------------------------------
+
+const standards = standardRows.map((row) => ({
+  courseId: row.Course_ID,
+  code: row.Standard_Code,
+  group: row.Standard_Group,
+  description: row.Short_Description,
+  sourceId: row.Source_ID,
+  firstLessonCode: row.First_Scheduled_Lesson,
+  coverageCount: num(row.Coverage_Count, `Standards Crosswalk.${row.Standard_Code}.Coverage_Count`),
+  status: row.Coverage_Status,
+}));
+
+// ---------------------------------------------------------------------------
+// Intervention bank
+// ---------------------------------------------------------------------------
+
+let interventionStructure = null;
+const interventions = interventionRows.map((row) => {
+  const structure = phases(row["30_Minute_Structure"]);
+  if (interventionStructure === null) interventionStructure = structure;
+  require(
+    JSON.stringify(structure) === JSON.stringify(interventionStructure),
+    `${row.Intervention_ID}: support structure differs from the rest of the bank.`,
+  );
+  return {
+    id: row.Intervention_ID,
+    subject: row.Subject,
+    category: row.Category,
+    skill: row.Basic_Skill,
+    gradeSpan: row.Grade_Span,
+    trigger: row.Diagnostic_Trigger,
+    objective: row.Learning_Objective,
+    components: row.Core_Components,
+    exitCriteria: row.Exit_Criteria,
+    standardsSupport: list(row.Standards_Support),
+    tags: list(row.Tags, "|"),
+    returnCourseIds: list(row.Return_Destinations),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Prerequisites
+// ---------------------------------------------------------------------------
+
+/**
+ * Six prior lessons or supports per course lesson, interned.
+ *
+ * The reason text repeats across tens of thousands of rows, so reasons go in a
+ * table and each link holds an index into it. A link's kind is not stored:
+ * an intervention id contains `-INT-` and a lesson id does not, so the kind is
+ * recoverable from the id itself and cannot drift out of step with it.
+ */
+const reasonTable = [];
+const reasonIndex = new Map();
+function internReason(text) {
+  const existing = reasonIndex.get(text);
+  if (existing !== undefined) return existing;
+  const at = reasonTable.length;
+  reasonTable.push(text);
+  reasonIndex.set(text, at);
+  return at;
+}
+
+const prerequisitesByLesson = {};
+for (const row of prerequisiteRows) {
+  const links = [];
+  for (let n = 1; n <= 6; n++) {
+    const id = row[`Prereq_${n}_ID`];
+    if (!id) continue;
+    links.push([id, internReason(row[`Prereq_${n}_Reason`])]);
+  }
+  prerequisitesByLesson[row.Lesson_ID] = links;
+}
+
+// ---------------------------------------------------------------------------
+// Concept edges and course pathways
+// ---------------------------------------------------------------------------
+
+const conceptEdges = conceptRows.map((row) => ({
+  courseId: row.Course_ID,
+  unitId: row.Unit_ID,
+  from: row.From_Concept,
+  to: row.To_Concept,
+  relationship: row.Relationship,
+  strength: num(row.Strength_1_to_5, `Concept Edges.${row.Unit_ID}.Strength_1_to_5`),
+  exampleLessonCode: row.Example_Lesson_ID,
+}));
+
+const pathways = pathwayRows.map((row) => ({
+  subject: row.Subject,
+  fromCourseId: row.From_Course_ID,
+  toCourseId: row.To_Course_ID,
+  relationship: row.Relationship,
+  fromCapstoneLessonCode: row.From_Capstone_Lesson,
+  toEntryLessonCode: row.To_Entry_Lesson,
+  handoffRule: row.Handoff_Rule,
+}));
+
+const sources = sourceRows.map((row) => ({
+  id: row.Source_ID,
+  title: row.Source_Title,
+  domain: row.Domain,
+  url: row.URL,
+  scope: row.Scope_Used,
+  authority: row.Authority_or_Date,
+  notes: row.Notes,
+}));
+
+// ---------------------------------------------------------------------------
+// Validate
+// ---------------------------------------------------------------------------
+
+const courseIds = new Set(courses.map((c) => c.id));
+const interventionIds = new Set(interventions.map((i) => i.id));
+
+for (const course of courses) {
+  const where = `${course.id}`;
+  require(
+    course.pathwayDays === CONTRACT.pathwayDays,
+    `${where}: ${course.pathwayDays} pathway days; the contract is ${CONTRACT.pathwayDays}.`,
+  );
+  require(
+    course.interventionCapacity === CONTRACT.interventionCapacity,
+    `${where}: ${course.interventionCapacity} intervention-capacity days; the contract is ${CONTRACT.interventionCapacity}.`,
+  );
+  require(
+    course.units.length === CONTRACT.unitsPerCourse,
+    `${where}: ${course.units.length} units; expected ${CONTRACT.unitsPerCourse}.`,
+  );
+  require(
+    SUBJECT_ORDER.includes(course.subject),
+    `${where}: unknown subject "${course.subject}".`,
+  );
+
+  const days = new Set();
+  let lessonCount = 0;
+  const courseStandards = new Set(
+    standards.filter((s) => s.courseId === course.id).map((s) => s.code),
+  );
+  require(courseStandards.size > 0, `${where}: no standards in the crosswalk.`);
+
+  for (const unit of course.units) {
+    lessonCount += unit.lessons.length;
+    require(
+      unit.lessons.length === CONTRACT.lessonsPerUnit,
+      `${unit.id}: ${unit.lessons.length} lessons; expected ${CONTRACT.lessonsPerUnit}.`,
+    );
+    require(
+      unit.endDay - unit.startDay + 1 === unit.lessons.length,
+      `${unit.id}: day span ${unit.startDay}-${unit.endDay} does not match ${unit.lessons.length} lessons.`,
+    );
+    for (const lesson of unit.lessons) {
+      require(!days.has(lesson.day), `${lesson.code}: duplicate course day ${lesson.day}.`);
+      days.add(lesson.day);
+      require(
+        lesson.day >= unit.startDay && lesson.day <= unit.endDay,
+        `${lesson.code}: day ${lesson.day} is outside ${unit.id} (${unit.startDay}-${unit.endDay}).`,
+      );
+      require(
+        courseStandards.has(lesson.primaryStandard),
+        `${lesson.code}: primary standard ${lesson.primaryStandard} is not in ${course.id}'s crosswalk.`,
+      );
+      for (const code of lesson.supportingStandards) {
+        require(
+          courseStandards.has(code),
+          `${lesson.code}: supporting standard ${code} is not in ${course.id}'s crosswalk.`,
+        );
+      }
+      require(
+        Array.isArray(prerequisitesByLesson[lesson.code]) &&
+          prerequisitesByLesson[lesson.code].length === 6,
+        `${lesson.code}: expected six prerequisites, found ${prerequisitesByLesson[lesson.code]?.length ?? 0}.`,
+      );
+    }
+  }
+
+  require(
+    lessonCount === CONTRACT.pathwayDays,
+    `${where}: ${lessonCount} lessons against ${CONTRACT.pathwayDays} pathway days.`,
+  );
+}
+
+for (const standard of standards) {
+  require(
+    courseIds.has(standard.courseId),
+    `Standard ${standard.code}: unknown course ${standard.courseId}.`,
+  );
+  require(
+    standard.status === "COVERED" && standard.coverageCount > 0,
+    `Standard ${standard.code} in ${standard.courseId} is ${standard.status} with ${standard.coverageCount} lessons.`,
+  );
+}
+
+for (const [lessonCode, links] of Object.entries(prerequisitesByLesson)) {
+  require(lessonsByCode.has(lessonCode), `Prerequisite map: unknown lesson ${lessonCode}.`);
+  for (const [id] of links) {
+    require(
+      lessonsByCode.has(id) || interventionIds.has(id),
+      `${lessonCode}: prerequisite ${id} resolves to neither a lesson nor a support.`,
+    );
+  }
+}
+
+for (const edge of pathways) {
+  require(courseIds.has(edge.fromCourseId), `Pathway: unknown course ${edge.fromCourseId}.`);
+  require(courseIds.has(edge.toCourseId), `Pathway: unknown course ${edge.toCourseId}.`);
+  require(
+    lessonsByCode.has(edge.fromCapstoneLessonCode),
+    `Pathway ${edge.fromCourseId} -> ${edge.toCourseId}: unknown capstone ${edge.fromCapstoneLessonCode}.`,
+  );
+  require(
+    lessonsByCode.has(edge.toEntryLessonCode),
+    `Pathway ${edge.fromCourseId} -> ${edge.toCourseId}: unknown entry ${edge.toEntryLessonCode}.`,
+  );
+}
+
+for (const intervention of interventions) {
+  for (const courseId of intervention.returnCourseIds) {
+    require(
+      courseIds.has(courseId),
+      `${intervention.id}: return destination ${courseId} is not a course.`,
+    );
+  }
+}
+
+for (const edge of conceptEdges) {
+  require(unitsById.has(edge.unitId), `Concept edge: unknown unit ${edge.unitId}.`);
+  require(
+    lessonsByCode.has(edge.exampleLessonCode),
+    `Concept edge in ${edge.unitId}: unknown example lesson ${edge.exampleLessonCode}.`,
+  );
+}
+
+if (problems.length > 0) {
+  console.error(`\nThe workbook does not validate. ${problems.length} problem(s):\n`);
+  for (const problem of problems.slice(0, 40)) console.error(`  - ${problem}`);
+  if (problems.length > 40) console.error(`  … and ${problems.length - 40} more.`);
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Write
+// ---------------------------------------------------------------------------
+
+mkdirSync(OUT_DIR, { recursive: true });
+
+const files = {
+  "catalog.json": {
+    builtAt,
+    source: SOURCE,
+    contract: CONTRACT,
+    lessonStructure,
+    lessonArc,
+    subjects: SUBJECT_ORDER,
+    courses,
+  },
+  "standards.json": { standards, sources },
+  "interventions.json": { structure: interventionStructure, interventions },
+  "prerequisites.json": { reasons: reasonTable, byLesson: prerequisitesByLesson },
+  "concepts.json": { edges: conceptEdges },
+  "pathways.json": { pathways },
+};
+
+let total = 0;
+for (const [name, payload] of Object.entries(files)) {
+  const json = JSON.stringify(payload);
+  writeFileSync(`${OUT_DIR}/${name}`, `${json}\n`);
+  total += json.length;
+  console.log(`  ${name.padEnd(20)} ${(json.length / 1024).toFixed(0).padStart(6)} KB`);
+}
+
+const lessonCount = [...lessonsByCode.keys()].length;
+console.log(`
+Built from ${SOURCE} (workbook dated ${builtAt}).
+  ${courses.length} courses · ${unitsById.size} units · ${lessonCount} lessons
+  ${standards.length} standards · ${interventions.length} supports
+  ${Object.values(prerequisitesByLesson).reduce((n, l) => n + l.length, 0)} prerequisite links · ${conceptEdges.length} concept edges
+  ${pathways.length} course-to-course pathways
+  ${(total / 1024 / 1024).toFixed(2)} MB total
+`);

@@ -42,12 +42,12 @@ export type BudgetReport = {
 export function validateCourseBudget(course: CatalogCourse): BudgetReport {
   const unitDays = course.units.map((u) => ({
     unitId: u.id,
-    unitName: u.name,
+    unitName: u.title,
     pathwayDays: u.pathwayDays,
   }));
   const lessonDaysByUnit = course.units.map((u) => ({
     unitId: u.id,
-    lessonDays: u.lessons.reduce((n, l) => n + l.days, 0),
+    lessonDays: u.lessons.length,
   }));
 
   const pathwayDays = unitDays.reduce((n, u) => n + u.pathwayDays, 0);
@@ -71,16 +71,16 @@ export function validateCourseBudget(course: CatalogCourse): BudgetReport {
   }
 
   for (const unit of course.units) {
-    const lessonDays = unit.lessons.reduce((n, l) => n + l.days, 0);
+    const lessonDays = unit.lessons.length;
     if (lessonDays > unit.pathwayDays) {
       findings.push({
         severity: "error",
-        message: `Unit ${unit.id} (${unit.name}): lessons total ${lessonDays} days against a ${unit.pathwayDays}-day unit budget.`,
+        message: `Unit ${unit.id} (${unit.title}): lessons total ${lessonDays} days against a ${unit.pathwayDays}-day unit budget.`,
       });
     } else if (lessonDays < unit.pathwayDays) {
       findings.push({
         severity: "warning",
-        message: `Unit ${unit.id} (${unit.name}): lessons total ${lessonDays} days against a ${unit.pathwayDays}-day unit budget. ${unit.pathwayDays - lessonDays} unassigned.`,
+        message: `Unit ${unit.id} (${unit.title}): lessons total ${lessonDays} days against a ${unit.pathwayDays}-day unit budget. ${unit.pathwayDays - lessonDays} unassigned.`,
       });
     }
   }

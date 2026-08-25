@@ -9,13 +9,15 @@
  * reason field of every audit event this file writes, so seeded actions are
  * distinguishable from actions a reviewer takes.
  *
- * Curriculum facts — course titles, unit names, day budgets, lesson codes,
- * standard codes, assessment ids, intervention ids — are read from
- * `lib/curriculum/data/catalog.json`, which is generated from the blueprint.
- * Nothing here invents curriculum.
+ * Curriculum facts — course titles, unit names, day budgets, lesson codes, and
+ * standard codes — are read from `lib/curriculum/data/`, which is generated
+ * from the curriculum architecture workbook. Nothing here invents curriculum.
+ * A student's weak skills are given as COURSE DAYS, and the standard behind
+ * each is resolved from the catalog, so the seed cannot claim a standard the
+ * curriculum does not have.
  *
  * Historical evidence uses item identifiers derived from each lesson's
- * blueprint assessment record (for example `A-M6-U1-L1#2`). Live work uses the
+ * assessment record (for example `A-MATH-06-L004#2`). Live work uses the
  * authored demo item bank in `demo-items.ts`.
  */
 import { currentTimestamp, nextTimestamp, resetClock } from "@/lib/clock";
@@ -24,12 +26,17 @@ import {
   COURSES,
   courseLessons,
   getCourse,
-  interventionId,
   primaryStandards,
   standardCode,
   assessmentId,
   type CatalogCourse,
 } from "@/lib/curriculum/catalog";
+import { prerequisiteSupports } from "@/lib/curriculum/prerequisites";
+import {
+  GRADE_CATEGORY_SHAPE,
+  categoryIdFor,
+} from "@/lib/grades/gradebook";
+import { SUPPORT_MINUTES } from "@/lib/intervention/bank";
 import { DEFAULT_RETURN_RULE, RULE_VERSIONS } from "@/lib/rules/versions";
 import { appendAudit, appendGradeRecord, db, nextId } from "./store";
 import { recordEvidence } from "@/lib/evidence/ledger";
@@ -76,8 +83,11 @@ type SeedCourse = {
   title: string;
   /** Lesson the student is currently on. Everything before it is complete. */
   at: string;
-  /** Standards this student has struggled with, and the error family shown. */
-  weak?: { standard: string; errorCode: string }[];
+  /**
+   * Course days this student has struggled on, and the error family shown.
+   * The standard is resolved from the catalog, never written down here.
+   */
+  weak?: { day: number; errorCode: string }[];
 };
 
 type SeedStudent = {
@@ -94,108 +104,90 @@ const SEED_STUDENTS: SeedStudent[] = [
   {
     key: "amara", first: "Amara", last: "Oyelaran", grade: 6, site: "ORO",
     courses: [
-      { title: "Mathematics 6", at: "M6-U1-L2", weak: [{ standard: "6.RP.1", errorCode: "fraction-or-ratio" }] },
-      { title: "English 6", at: "E6-U1-L2", weak: [{ standard: "RL.6.1", errorCode: "evidence-without-support" }] },
-      { title: "Integrated Science 6", at: "S6-U1-L2" },
-      { title: "Grade 6 Ancient World", at: "H6-U1-L2", weak: [{ standard: "HSS-AS.6-8.CST.1", errorCode: "no-temporal-relationship" }] },
+      { title: "Mathematics 6", at: "MATH-06-L035", weak: [{ day: 20, errorCode: "fraction-or-ratio" }] },
+      { title: "English 6", at: "ELA-06-L021", weak: [{ day: 7, errorCode: "evidence-without-support" }] },
+      { title: "Integrated Science 6", at: "SCI-06-L078", weak: [{ day: 4, errorCode: "model-omits-component" }] },
+      { title: "Grade 6 Ancient World", at: "HSS-06-L001" },
     ],
   },
   {
     key: "tobias", first: "Tobias", last: "Ferreira", grade: 7, site: "MESA",
     courses: [
-      { title: "Mathematics 7", at: "M7-U1-L2", weak: [{ standard: "7.RP.1", errorCode: "unit-and-scale" }] },
-      { title: "English 7", at: "E7-U1-L2" },
-      { title: "Integrated Science 7", at: "S7-U1-L2", weak: [{ standard: "MS-PS1-1", errorCode: "model-omits-component" }] },
-      { title: "Grade 7 Medieval/Early Modern World", at: "H7-U1-L2" },
+      { title: "Mathematics 7", at: "MATH-07-L022", weak: [{ day: 16, errorCode: "unit-and-scale" }] },
+      { title: "English 7", at: "ELA-07-L014" },
+      { title: "Integrated Science 7", at: "SCI-07-L020", weak: [{ day: 5, errorCode: "model-omits-component" }] },
+      { title: "Grade 7 Medieval/Early Modern World", at: "HSS-07-L018" },
     ],
   },
   {
     key: "diego", first: "Diego", last: "Reyes-Marin", grade: 8, site: "ORO",
     courses: [
-      { title: "Mathematics 8", at: "M8-U1-L3", weak: [
-        { standard: "8.EE.1", errorCode: "distribution-and-like-terms" },
-        { standard: "8.EE.2", errorCode: "inverse-operation" }] },
-      { title: "English 8", at: "E8-U1-L2", weak: [{ standard: "RL.8.1", errorCode: "ungrounded-inference" }] },
-      { title: "Integrated Science 8", at: "S8-U1-L2" },
-      { title: "Grade 8 U.S. Growth and Conflict", at: "H8-U1-L2" },
+      { title: "Mathematics 8", at: "MATH-08-L023", weak: [
+        { day: 3, errorCode: "distribution-and-like-terms" },
+        { day: 4, errorCode: "inverse-operation" }] },
+      { title: "English 8", at: "ELA-08-L018", weak: [{ day: 7, errorCode: "ungrounded-inference" }] },
+      { title: "Integrated Science 8", at: "SCI-08-L016" },
+      { title: "Grade 8 U.S. Growth and Conflict", at: "HSS-08-L020" },
     ],
   },
   {
     key: "priya", first: "Priya", last: "Raghunathan", grade: 9, site: "ORO",
     courses: [
-      { title: "Integrated Math 1", at: "IM1-U2-L2", weak: [{ standard: "A-SSE.1.a", errorCode: "variable-interpretation" }] },
-      { title: "English 9", at: "E9-U1-L2" },
-      { title: "Living Earth", at: "LE-U1-L2" },
-      { title: "Grade 9 World Geography and Contemporary Issues", at: "H9-U1-L2" },
+      { title: "Math 1", at: "MATH-1-L046", weak: [{ day: 16, errorCode: "variable-interpretation" }] },
+      { title: "English 9", at: "ELA-09-L021" },
+      { title: "Biology", at: "SCI-BIO-L012" },
+      { title: "Human Geography", at: "HSS-HGEO-L010" },
     ],
   },
   {
     key: "jamal", first: "Jamal", last: "Ortiz", grade: 9, site: "ORO", transferredFrom: "MESA",
     courses: [
-      { title: "Integrated Math 1", at: "IM1-U2-L2", weak: [{ standard: "N-Q.2", errorCode: "unit-and-scale" }] },
-      { title: "English 9", at: "E9-U1-L2", weak: [{ standard: "RL.9-10.1", errorCode: "quotation-without-commentary" }] },
-      { title: "Living Earth", at: "LE-U1-L2" },
-      { title: "Grade 9 World Geography and Contemporary Issues", at: "H9-U1-L2" },
+      { title: "Math 1", at: "MATH-1-L030", weak: [{ day: 2, errorCode: "unit-and-scale" }] },
+      { title: "English 9", at: "ELA-09-L018", weak: [{ day: 7, errorCode: "quotation-without-commentary" }] },
+      { title: "Biology", at: "SCI-BIO-L014" },
+      { title: "Human Geography", at: "HSS-HGEO-L012" },
     ],
   },
   {
     key: "marcus", first: "Marcus", last: "Bell", grade: 10, site: "ORO",
     courses: [
-      { title: "Integrated Math 2", at: "IM2-U1-L3", weak: [{ standard: "N-RN.2", errorCode: "equality-and-equivalence" }] },
-      { title: "English 10", at: "E10-U1-L2" },
-      { title: "Chemistry in the Earth System", at: "CHEM-U1-L2" },
-      { title: "Grade 10 Modern World", at: "H10-U1-L2", weak: [{ standard: "HSS-10.1", errorCode: "single-cause" }] },
+      { title: "Math 2", at: "MATH-2-L025", weak: [{ day: 6, errorCode: "equality-and-equivalence" }] },
+      { title: "English 10", at: "ELA-10-L018" },
+      { title: "Chemistry", at: "SCI-CHEM-L016" },
+      { title: "Modern World History", at: "HSS-MWH-L020", weak: [{ day: 5, errorCode: "single-cause" }] },
     ],
   },
   {
     key: "sofia", first: "Sofia", last: "Nakamura", grade: 11, site: "MESA",
     courses: [
-      { title: "Integrated Math 3", at: "IM3-U1-L2" },
-      { title: "English 11", at: "E11-U1-L2", weak: [{ standard: "RL.11-12.1", errorCode: "quotation-without-commentary" }] },
-      { title: "Physics of the Universe", at: "PHYS-U1-L2" },
-      { title: "Grade 11 U.S. Continuity and Change", at: "H11-U1-L2" },
+      { title: "Math 3", at: "MATH-3-L020" },
+      { title: "English 11", at: "ELA-11-L021", weak: [{ day: 7, errorCode: "quotation-without-commentary" }] },
+      { title: "Physics", at: "SCI-PHYS-L018" },
+      { title: "US History", at: "HSS-US-L022" },
     ],
   },
   {
     key: "lena", first: "Lena", last: "Whitcomb", grade: 12, site: "MESA",
     courses: [
-      { title: "Statistics", at: "STAT-U1-L2" },
-      { title: "English 12", at: "E12-U1-L2" },
-      { title: "Environmental Science", at: "ENV-U1-L2", weak: [{ standard: "HS-ESS2-2", errorCode: "correlation-as-cause" }] },
-      { title: "Grade 12 Government and Economics", at: "H12-U0-L2" },
+      { title: "Statistics", at: "MATH-STATS-L020" },
+      { title: "English 12", at: "ELA-12-L018" },
+      { title: "Environmental Science", at: "SCI-ENV-L016", weak: [{ day: 6, errorCode: "correlation-as-cause" }] },
+      { title: "Government", at: "HSS-GOV-L014" },
     ],
   },
 ];
 
 const SEED_STAFF = [
   { key: "alvarez", first: "Renata", last: "Alvarez", role: "teacher" as const, site: "ORO" as const, subjects: ["Mathematics"], curriculumAuthor: true },
-  { key: "adjei", first: "Kwame", last: "Adjei", role: "teacher" as const, site: "ORO" as const, subjects: ["English", "Social science"], curriculumAuthor: false },
+  { key: "adjei", first: "Kwame", last: "Adjei", role: "teacher" as const, site: "ORO" as const, subjects: ["English Language Arts", "History-Social Science"], curriculumAuthor: false },
   { key: "delacroix", first: "Hana", last: "Delacroix", role: "teacher" as const, site: "ORO" as const, subjects: ["Science"], curriculumAuthor: false },
   { key: "thornbury", first: "Elias", last: "Thornbury", role: "teacher" as const, site: "MESA" as const, subjects: ["Mathematics", "Science"], curriculumAuthor: false },
-  { key: "farouk", first: "Nadia", last: "Farouk", role: "teacher" as const, site: "MESA" as const, subjects: ["English", "Social science"], curriculumAuthor: false },
+  { key: "farouk", first: "Nadia", last: "Farouk", role: "teacher" as const, site: "MESA" as const, subjects: ["English Language Arts", "History-Social Science"], curriculumAuthor: false },
   { key: "salinas", first: "Victor", last: "Salinas", role: "site_admin" as const, site: "ORO" as const, subjects: [], curriculumAuthor: false },
   { key: "petrova", first: "Ingrid", last: "Petrova", role: "site_admin" as const, site: "MESA" as const, subjects: [], curriculumAuthor: false },
   { key: "okonjo", first: "Camille", last: "Okonjo", role: "org_admin" as const, site: null, subjects: [], curriculumAuthor: false },
   { key: "haddad", first: "Yusra", last: "Haddad", role: "curriculum_author" as const, site: null, subjects: [], curriculumAuthor: true },
 ];
-
-/**
- * Two gradebook categories, matching how the results actually differ in kind:
- * short checks taken along the way, and the assessments a unit is judged on.
- * The weights are a demo default, not an adopted grading policy.
- */
-const GRADE_CATEGORY_SHAPE = [
-  { suffix: "KC", name: "Knowledge checks", weight: 0.4 },
-  { suffix: "AS", name: "Assessments", weight: 0.6 },
-];
-
-/**
- * L1 and L2 lessons carry probes, exit tickets, and reasoning checks; L3
- * lessons carry the common assessment and the performance task.
- */
-function categorySuffix(lessonCode: string): string {
-  return /-(L3)$/.test(lessonCode) ? "AS" : "KC";
-}
 
 /**
  * The five sites of the district. The named demo people below all sit at the
@@ -247,13 +239,12 @@ const LAST_NAMES = [
 ];
 
 /**
- * Grade 12 mathematics is a branch decision, not a single course: the blueprint
- * lists Precalculus, Statistics, and Quantitative Reasoning as separate
- * approved pathways "selected by placement and graduation plans" (§9). Spreading
- * a cohort across them is what a real roster looks like — and it is what makes
+ * Grade 12 mathematics is a branch decision, not a single course: the pathway
+ * graph opens Precalculus, Statistics, and Calculus off Math 3. Spreading a
+ * cohort across them is what a real roster looks like — and it is what makes
  * some course-at-site slices genuinely small.
  */
-const GRADE_12_MATH = ["Precalculus", "Statistics", "Quantitative Reasoning"];
+const GRADE_12_MATH = ["Precalculus", "Statistics", "Calculus"];
 
 function coursesForGrade(grade: number, seed: string): string[] {
   const base = GRADE_COURSES[grade] ?? [];
@@ -267,10 +258,10 @@ const GRADE_COURSES: Record<number, string[]> = {
   6: ["Mathematics 6", "English 6", "Integrated Science 6", "Grade 6 Ancient World"],
   7: ["Mathematics 7", "English 7", "Integrated Science 7", "Grade 7 Medieval/Early Modern World"],
   8: ["Mathematics 8", "English 8", "Integrated Science 8", "Grade 8 U.S. Growth and Conflict"],
-  9: ["Integrated Math 1", "English 9", "Living Earth", "Grade 9 World Geography and Contemporary Issues"],
-  10: ["Integrated Math 2", "English 10", "Chemistry in the Earth System", "Grade 10 Modern World"],
-  11: ["Integrated Math 3", "English 11", "Physics of the Universe", "Grade 11 U.S. Continuity and Change"],
-  12: ["Statistics", "English 12", "Environmental Science", "Grade 12 Government and Economics"],
+  9: ["Math 1", "English 9", "Biology", "Human Geography"],
+  10: ["Math 2", "English 10", "Chemistry", "Modern World History"],
+  11: ["Math 3", "English 11", "Physics", "US History"],
+  12: ["Statistics", "English 12", "Environmental Science", "Government"],
 };
 
 // ---------------------------------------------------------------------------
@@ -498,13 +489,13 @@ function seedDistrictPopulation(
     // --- Staff ---------------------------------------------------------
     const subjectRota = [
       ["Mathematics"],
-      ["English"],
+      ["English Language Arts"],
       ["Science"],
-      ["Social science"],
+      ["History-Social Science"],
       ["Mathematics", "Science"],
-      ["English", "Social science"],
+      ["English Language Arts", "History-Social Science"],
       ["Mathematics"],
-      ["English"],
+      ["English Language Arts"],
       ["Science"],
     ];
     const siteTeachers: User[] = d.users.filter(
@@ -694,7 +685,7 @@ function seedLightPathway(
       id: nextId("gr"),
       studentId: student.id,
       enrollmentId: enrollment.id,
-      categoryId: `gc_${enrollment.courseTitle.replace(/[^A-Za-z0-9]+/g, "_")}_${categorySuffix(lesson.code)}`,
+      categoryId: categoryIdFor(enrollment.courseTitle, lesson.code),
       assessmentId: assessmentId(lesson),
       lessonCode: lesson.code,
       pointsEarned: earned,
@@ -723,8 +714,15 @@ function seedPathway(
   const lessons = courseLessons(course);
   const currentIndex = lessons.findIndex((l) => l.code === seed.at);
   const stopAt = currentIndex < 0 ? 0 : currentIndex;
+  // A weak skill is given as a course day; the standard behind it comes from
+  // the catalog, so the seed never names a standard the curriculum lacks.
   const weakByStandard = new Map(
-    (seed.weak ?? []).map((w) => [w.standard, w.errorCode]),
+    (seed.weak ?? [])
+      .map((w) => {
+        const lesson = lessons.find((l) => l.day === w.day);
+        return lesson ? ([lesson.primaryStandard, w.errorCode] as const) : null;
+      })
+      .filter((pair): pair is readonly [string, string] => pair !== null),
   );
 
   lessons.forEach((lesson, index) => {
@@ -887,7 +885,7 @@ function seedPathway(
       id: nextId("gr"),
       studentId: student.id,
       enrollmentId: enrollment.id,
-      categoryId: `gc_${enrollment.courseTitle.replace(/[^A-Za-z0-9]+/g, "_")}_${categorySuffix(lesson.code)}`,
+      categoryId: categoryIdFor(enrollment.courseTitle, lesson.code),
       assessmentId: assessmentId(lesson),
       lessonCode: lesson.code,
       pointsEarned: earned,
@@ -922,6 +920,10 @@ function seedInterventions(
     if (!student || !enrollment || !course) return;
     const found = courseLessons(course).find((l) => l.code === lessonCode);
     if (!found) return;
+    // The support is the one the curriculum itself names as a prerequisite for
+    // this lesson, not one picked here.
+    const support = prerequisiteSupports(found.code)[0];
+    if (!support) return;
 
     const triggers = db()
       .evidence.filter(
@@ -936,13 +938,13 @@ function seedInterventions(
       studentId: student.id,
       enrollmentId: enrollment.id,
       status: "assigned",
-      interventionLessonId: interventionId(found),
+      interventionLessonId: support.id,
       targetSkill: standardCode(primaryStandards(found)[0] ?? `${found.code}-readiness`),
       targetStandard: primaryStandards(found)[0] ?? null,
       severity: "immediate",
       triggerEvidenceIds: triggers,
       triggerSummary: "Two recent misses share the same error pattern.",
-      estimatedMinutes: 20,
+      estimatedMinutes: SUPPORT_MINUTES,
       returnLessonCode: lessonCode,
       returnStage: 5,
       returnRuleVersion: DEFAULT_RETURN_RULE.version,
@@ -979,8 +981,14 @@ function seedInterventions(
     });
   };
 
-  make("diego", "Mathematics 8", "M8-U1-L3", { status: "in_progress" }, "alvarez");
-  make("marcus", "Integrated Math 2", "IM2-U1-L3", {
+  make("amara", "Mathematics 6", "MATH-06-L035", {
+    status: "assigned",
+    triggerSummary:
+      "Two recent unit-rate items were divided the wrong way round, which is the same error twice.",
+    decisionReason: "Short support before the percent work that builds on it.",
+  }, "alvarez");
+  make("diego", "Mathematics 8", "MATH-08-L023", { status: "in_progress" }, "alvarez");
+  make("marcus", "Math 2", "MATH-2-L025", {
     status: "escalated",
     cycles: 2,
     severity: "teacher_review",
@@ -990,24 +998,24 @@ function seedInterventions(
     transferPassed: false,
     decisionReason: "Two cycles did not resolve it; setting up a conference.",
   }, "alvarez");
-  make("priya", "Integrated Math 1", "IM1-U2-L2", {
+  make("priya", "Math 1", "MATH-1-L046", {
     status: "returned_to_pathway",
     readinessPercent: 100,
     transferPassed: true,
     cycles: 1,
     decisionReason: "Assigned after a repeated error pattern on variable interpretation.",
   }, "alvarez");
-  make("sofia", "English 11", "E11-U1-L2", {
+  make("sofia", "English 11", "ELA-11-L021", {
     status: "readiness_check",
     severity: "targeted",
     triggerSummary:
       "This rubric dimension has limited the result on three separate pieces of work.",
     decisionReason: "Quotation integration keeps capping the analysis score.",
   }, "farouk");
-  make("jamal", "English 9", "E9-U1-L2", {
+  make("jamal", "English 9", "ELA-09-L018", {
     status: "assigned",
     triggerSummary: "Quotations are dropped into the draft without commentary in two recent responses.",
-    decisionReason: "Short support before the Unit 1 performance task.",
+    decisionReason: "Short support before the Unit 2 performance task.",
   }, "adjei");
 }
 
@@ -1030,9 +1038,9 @@ function seedMessages(staff: Map<string, User>, students: Map<string, User>): vo
   };
 
   push("alvarez", "amara", "Nice work on the ratio table",
-    "Your ratio table in M6-U1-L1 was set up well. Keep labelling the units on each column — that is what made the last row easy to check.");
+    "Your ratio table this week was set up well. Keep labelling the units on each column — that is what made the last row easy to check.");
   push("adjei", "jamal", "Bring your draft Thursday",
-    "Bring the Unit 1 draft to class on Thursday and we will work on the quotation commentary together.");
+    "Bring the Unit 2 draft to class on Thursday and we will work on the quotation commentary together.");
   push("amara", "amara", "I need help with unit rate",
     "I keep getting the division backwards when the question says 'per'. Can we go over it?", true);
   push("alvarez", "diego", "Checking in",

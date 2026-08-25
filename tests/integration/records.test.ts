@@ -106,7 +106,7 @@ describe("evidence is append-only (CLAUDE.md §5)", () => {
         {
           studentId: "u_amara",
           enrollmentId: ENROLLMENT,
-          lessonCode: "M6-U1-L2",
+          lessonCode: "MATH-06-L035",
           skill: "6.RP.2",
           standard: "6.RP.2",
           note: "",
@@ -122,7 +122,7 @@ describe("evidence is append-only (CLAUDE.md §5)", () => {
       {
         studentId: "u_amara",
         enrollmentId: ENROLLMENT,
-        lessonCode: "M6-U1-L2",
+        lessonCode: "MATH-06-L035",
         skill: "6.RP.2",
         standard: "6.RP.2",
         note: "Used the unit rate correctly in discussion.",
@@ -143,7 +143,7 @@ describe("evidence is append-only (CLAUDE.md §5)", () => {
         {
           studentId: "u_amara",
           enrollmentId: ENROLLMENT,
-          lessonCode: "M6-U1-L2",
+          lessonCode: "MATH-06-L035",
           skill: "6.RP.2",
           standard: "6.RP.2",
           note: "Note.",
