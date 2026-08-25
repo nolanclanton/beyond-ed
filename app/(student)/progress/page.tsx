@@ -120,7 +120,7 @@ export default async function ProgressPage() {
                 {!offered ? (
                   <p className="mt-1 text-xs text-ink-muted">
                     Not one of your courses here yet. Right now Beyond.Ed covers
-                    maths, English, science, and social science.
+                    mathematics, English, science, and social science.
                   </p>
                 ) : mine.length === 0 ? (
                   <p className="mt-1 text-xs text-ink-muted">No course placed.</p>
