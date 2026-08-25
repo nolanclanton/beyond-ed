@@ -21,6 +21,7 @@
 import type {
   AuditEvent,
   AuthoredLesson,
+  CourseStructure,
   CourseVersion,
   Enrollment,
   EvidenceRecord,
@@ -44,6 +45,8 @@ export type Database = {
   courseVersions: CourseVersion[];
   /** Lesson content authored against a course version (CLAUDE.md §7). */
   authoredLessons: AuthoredLesson[];
+  /** Sequence and foundation overrides, one row per course version (§7). */
+  courseStructures: CourseStructure[];
   sections: RosterSection[];
   enrollments: Enrollment[];
   lessonStates: LessonState[];
@@ -84,6 +87,7 @@ function emptyDatabase(): Database {
     users: [],
     courseVersions: [],
     authoredLessons: [],
+    courseStructures: [],
     sections: [],
     enrollments: [],
     lessonStates: [],
@@ -120,6 +124,7 @@ export function db(): Database {
   // development. Backfill the empty collection rather than crash on a missing
   // array; a fresh process gets it from `emptyDatabase` either way.
   if (!store.authoredLessons) store.authoredLessons = [];
+  if (!store.courseStructures) store.courseStructures = [];
   return store;
 }
 
@@ -221,7 +226,19 @@ export function transact<T>(fn: () => T): T {
       guidedPractice: r.guidedPractice.map((g) => ({ ...g })),
       notesOutline: [...r.notesOutline],
       videos: r.videos.map((v) => ({ ...v })),
+      materials: r.materials.map((m) => ({ ...m })),
       items: r.items.map((i) => ({ ...i, choices: i.choices.map((c) => ({ ...c })) })),
+    })),
+    // Same reason as authored lessons: the nested arrays are mutated in place,
+    // so a shallow row copy would let a rolled-back re-sequence survive.
+    courseStructures: d.courseStructures.map((r) => ({
+      ...r,
+      unitOrder: r.unitOrder ? [...r.unitOrder] : null,
+      lessonOrder: Object.fromEntries(
+        Object.entries(r.lessonOrder).map(([unitId, codes]) => [unitId, [...codes]]),
+      ),
+      unitFraming: r.unitFraming.map((u) => ({ ...u })),
+      foundationEdits: r.foundationEdits.map((f) => ({ ...f })),
     })),
     sections: d.sections.map((r) => ({ ...r })),
     enrollments: d.enrollments.map((r) => ({ ...r })),

@@ -15,6 +15,7 @@ import {
   authoringGate,
   lessonReadiness,
 } from "@/lib/curriculum/lesson-authoring";
+import { effectiveCourse } from "@/lib/curriculum/structure";
 import {
   Banner,
   Card,
@@ -52,8 +53,9 @@ export default async function StudioUnitPage({
     notFound();
   }
   const version = gate.version;
-  const course = getCourse(version.courseTitle);
-  if (!course) notFound();
+  if (!getCourse(version.courseTitle)) notFound();
+  // The order THIS version runs in (`lib/curriculum/structure.ts`).
+  const course = effectiveCourse(version);
   const unit = getUnit(course, unitId);
   if (!unit) notFound();
 

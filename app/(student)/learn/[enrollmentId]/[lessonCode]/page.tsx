@@ -9,9 +9,13 @@ import {
   lessonType,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STAGES, LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
-import { LessonBlocks, LessonVideoPlayer } from "@/lib/design/lesson-blocks";
+import {
+  LessonBlocks,
+  LessonMaterialList,
+  LessonVideoPlayer,
+} from "@/lib/design/lesson-blocks";
 import type { LessonContent } from "@/lib/db/demo-lesson-content";
-import type { LessonVideo } from "@/lib/db/types";
+import type { LessonMaterial, LessonVideo } from "@/lib/db/types";
 import {
   itemsForLesson,
   resolveLessonContent,
@@ -245,6 +249,7 @@ export default async function LessonPage({
               lessonCode={lessonCode}
               content={content}
               videos={resolved.videos}
+              materials={resolved.materials}
               spiralItems={spiralItems}
               spiralExplanation={spiral?.explanation ?? []}
               exitItems={exitItems.map((i) => ({
@@ -340,6 +345,7 @@ type StageBodyProps = {
   lessonCode: string;
   content: LessonContent | null;
   videos: LessonVideo[];
+  materials: LessonMaterial[];
   spiralItems: {
     id: string;
     stem: string;
@@ -366,14 +372,20 @@ type StageBodyProps = {
 };
 
 function StageBody(props: StageBodyProps) {
-  const { stage, content, videos } = props;
-  // Videos the author attached but did not place on the canvas.
+  const { stage, content, videos, materials } = props;
+  // Videos and materials the author attached but did not place on the canvas.
   const placedVideoIds = new Set(
     (content?.instruction ?? [])
       .filter((b) => b.kind === "video")
       .map((b) => (b.kind === "video" ? b.videoId : "")),
   );
   const unplacedVideos = videos.filter((v) => !placedVideoIds.has(v.id));
+  const placedMaterialIds = new Set(
+    (content?.instruction ?? [])
+      .filter((b) => b.kind === "material")
+      .map((b) => (b.kind === "material" ? b.materialId : "")),
+  );
+  const unplacedMaterials = materials.filter((m) => !placedMaterialIds.has(m.id));
   const title = LESSON_STAGES[stage - 1];
 
   const notAuthored = (
@@ -514,24 +526,40 @@ function StageBody(props: StageBodyProps) {
             hint={
               videos.length > 0
                 ? "Readable text, with every video's transcript beside it."
-                : "Readable text. This lesson has no video."
+                : materials.length > 0
+                  ? "Readable text, with everything this lesson asks you to open."
+                  : "Readable text. This lesson has no video."
             }
           />
           <div className="p-5">
             {content ? (
               <>
-                <LessonBlocks blocks={content.instruction} videos={videos} />
+                <LessonBlocks
+                  blocks={content.instruction}
+                  videos={videos}
+                  materials={materials}
+                />
 
                 {/*
                   Anything the author attached but did not place on the canvas
-                  still belongs on the page: a video a student cannot reach is a
-                  lesson they were not given.
+                  still belongs on the page: a video or a worksheet a student
+                  cannot reach is a lesson they were not given.
                 */}
                 {unplacedVideos.length > 0 ? (
                   <div className="mt-6 flex max-w-2xl flex-col gap-4">
                     {unplacedVideos.map((video) => (
                       <LessonVideoPlayer key={video.id} video={video} />
                     ))}
+                  </div>
+                ) : null}
+                {unplacedMaterials.length > 0 ? (
+                  <div className="mt-6 max-w-2xl">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+                      What to open for this lesson
+                    </h3>
+                    <div className="mt-2">
+                      <LessonMaterialList materials={unplacedMaterials} />
+                    </div>
                   </div>
                 ) : null}
                 <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-ink-muted">

@@ -8,7 +8,11 @@ import { COURSES, courseSlug, getCourse } from "@/lib/curriculum/catalog";
 import { validateCourseBudget } from "@/lib/curriculum/budget";
 import { coverageGaps } from "@/lib/curriculum/standards";
 import { CURRICULUM_STATUS_PRESENTATION } from "@/lib/curriculum/publication";
-import { publicationGate, sectionsOnVersion } from "@/lib/curriculum/authoring";
+import {
+  publicationGate,
+  sectionsOnVersion,
+  versionAdaptationSummary,
+} from "@/lib/curriculum/authoring";
 import { db } from "@/lib/db/store";
 import {
   Banner,
@@ -37,8 +41,9 @@ export const metadata: Metadata = {
  * `curriculum_author` authorization moves a version forward — an org admin
  * without it sees the same information and no controls.
  *
- * Publication is gated twice: on the day budget, and on standards coverage.
- * Both gates are shown as results rather than described as rules.
+ * Publication is gated four times: on the day budget, on standards coverage, on
+ * structural integrity, and on the foundation map. Every gate is shown as a
+ * result rather than described as a rule.
  */
 export default async function CurriculumVersionsPage() {
   const actor = await requireUser();
@@ -165,6 +170,7 @@ export default async function CurriculumVersionsPage() {
             const course = getCourse(version.courseTitle);
             const report = course ? validateCourseBudget(course) : null;
             const gate = publicationGate(version.id);
+            const adapted = versionAdaptationSummary(version.id);
             const next =
               version.status === "draft"
                 ? ("in_review" as const)
@@ -209,6 +215,20 @@ export default async function CurriculumVersionsPage() {
                           : "—",
                       },
                       { label: "Next legal move", value: next.replace(/_/g, " ") },
+                      {
+                        label: "Adapted from the workbook",
+                        value:
+                          adapted.structure.length === 0
+                            ? "Runs the workbook sequence"
+                            : `${adapted.structure.length} sequencing or framing change${adapted.structure.length === 1 ? "" : "s"}`,
+                      },
+                      {
+                        label: "Foundations governed",
+                        value:
+                          adapted.governance.weighted === 0
+                            ? "None weighted yet"
+                            : `${adapted.governance.weighted} weighted · ${adapted.governance.foundational} foundational${adapted.governance.retired > 0 ? ` · ${adapted.governance.retired} retired` : ""}`,
+                      },
                     ]}
                   />
 
@@ -219,6 +239,14 @@ export default async function CurriculumVersionsPage() {
                     >
                       Open in the studio
                     </Link>
+                    {course ? (
+                      <Link
+                        href={`/org/curriculum/matrix/${courseSlug(course)}?version=${version.id}`}
+                        className={`font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
+                      >
+                        Govern the sequence and foundations
+                      </Link>
+                    ) : null}
                     {course ? (
                       <Link
                         href={`/org/curriculum/courses/${courseSlug(course)}`}

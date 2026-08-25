@@ -5,16 +5,20 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/session";
 import {
+  addLessonMaterial,
   addLessonVideo,
   createDraftVersion,
   moveLessonBlock,
   removeLessonBlock,
+  removeLessonMaterial,
   removeLessonVideo,
   removeQuizItem,
   saveLessonBlock,
   saveLessonScript,
   saveQuizItem,
 } from "@/lib/curriculum/lesson-authoring";
+
+import { LESSON_BLOCK_KINDS, LESSON_MATERIAL_KINDS } from "@/lib/db/types";
 
 import { toFailure, type ActionResult } from "./result";
 
@@ -145,16 +149,9 @@ const Block = z.object({
   versionId: z.string().min(1),
   lessonCode: z.string().min(1),
   blockId: z.string().min(1).nullable(),
-  kind: z.enum([
-    "heading",
-    "text",
-    "callout",
-    "list",
-    "definition",
-    "table",
-    "image",
-    "video",
-  ]),
+  // Read from the block union's own list rather than repeated here, so adding
+  // a block kind cannot leave this schema quietly rejecting it.
+  kind: z.enum(LESSON_BLOCK_KINDS),
   text: z.string().max(8000),
   title: z.string().max(200),
   tone: z.enum(["note", "important", "example", "memory"]),
@@ -168,6 +165,7 @@ const Block = z.object({
   url: z.string().max(2000),
   alt: z.string().max(600),
   videoId: z.string().max(120),
+  materialId: z.string().max(120),
   reason: REASON,
   idempotencyKey: KEY,
 });
@@ -182,6 +180,7 @@ const BLOCK_LABEL: Record<string, string> = {
   table: "Table",
   image: "Image",
   video: "Video",
+  material: "Material",
 };
 
 /** `a | b | c` per row — one line per row, columns separated by a pipe. */
@@ -216,6 +215,7 @@ export async function saveLessonBlockAction(
       url: String(formData.get("url") ?? ""),
       alt: String(formData.get("alt") ?? ""),
       videoId: String(formData.get("videoId") ?? ""),
+      materialId: String(formData.get("materialId") ?? ""),
       reason: formData.get("reason"),
       idempotencyKey: formData.get("idempotencyKey"),
     });
@@ -369,6 +369,100 @@ export async function removeLessonVideoAction(
     removeLessonVideo(actor, input, input.idempotencyKey);
     revalidatePath("/", "layout");
     return { ok: true, message: "Video removed from this draft." };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+const Material = z.object({
+  versionId: z.string().min(1),
+  lessonCode: z.string().min(1),
+  kind: z.enum(LESSON_MATERIAL_KINDS),
+  title: z.string().trim().min(1, "A material needs a title.").max(200),
+  url: z.string().trim().min(1, "A material needs an address.").max(2000),
+  purpose: z
+    .string()
+    .trim()
+    .min(1, "Say what the student does with this material.")
+    .max(600),
+  accessNote: z
+    .string()
+    .trim()
+    .min(1, "Say what format it is and how else a student can get it.")
+    .max(600),
+  minutes: z.coerce.number().min(0).max(600).nullable(),
+  reason: REASON,
+  idempotencyKey: KEY,
+});
+
+export async function addLessonMaterialAction(
+  formData: FormData,
+): Promise<ActionResult<{ title: string }>> {
+  try {
+    const actor = await requireUser();
+    const rawMinutes = String(formData.get("minutes") ?? "").trim();
+    const input = Material.parse({
+      versionId: formData.get("versionId"),
+      lessonCode: formData.get("lessonCode"),
+      kind: formData.get("kind"),
+      title: formData.get("title"),
+      url: formData.get("url"),
+      purpose: formData.get("purpose"),
+      accessNote: formData.get("accessNote"),
+      minutes: rawMinutes === "" ? null : rawMinutes,
+      reason: formData.get("reason"),
+      idempotencyKey: formData.get("idempotencyKey"),
+    });
+
+    const material = addLessonMaterial(
+      actor,
+      {
+        versionId: input.versionId,
+        lessonCode: input.lessonCode,
+        kind: input.kind,
+        title: input.title,
+        url: input.url,
+        purpose: input.purpose,
+        accessNote: input.accessNote,
+        minutes: input.minutes,
+        reason: input.reason,
+      },
+      input.idempotencyKey,
+    );
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      message: `“${material.title}” attached. Place it on the canvas to put it in front of a student.`,
+      title: material.title,
+    };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+const RemoveMaterial = z.object({
+  versionId: z.string().min(1),
+  lessonCode: z.string().min(1),
+  materialId: z.string().min(1),
+  reason: REASON,
+  idempotencyKey: KEY,
+});
+
+export async function removeLessonMaterialAction(
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const actor = await requireUser();
+    const input = RemoveMaterial.parse({
+      versionId: formData.get("versionId"),
+      lessonCode: formData.get("lessonCode"),
+      materialId: formData.get("materialId"),
+      reason: formData.get("reason"),
+      idempotencyKey: formData.get("idempotencyKey"),
+    });
+    removeLessonMaterial(actor, input, input.idempotencyKey);
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Material removed from this draft." };
   } catch (error) {
     return toFailure(error);
   }

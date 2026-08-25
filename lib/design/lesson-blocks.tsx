@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
-import type { CalloutTone, LessonBlock, LessonVideo } from "@/lib/db/types";
+import type {
+  CalloutTone,
+  LessonBlock,
+  LessonMaterial,
+  LessonMaterialKind,
+  LessonVideo,
+} from "@/lib/db/types";
 
 import { ScrollX } from "./primitives";
 import { FOCUS_RING } from "./tokens";
@@ -54,22 +60,25 @@ export const BLOCK_LABELS: Record<LessonBlock["kind"], string> = {
   table: "Table",
   image: "Image",
   video: "Video",
+  material: "Material",
 };
 
 export function LessonBlocks({
   blocks,
   videos = [],
+  materials = [],
   className = "",
 }: {
   blocks: readonly LessonBlock[];
   videos?: readonly LessonVideo[];
+  materials?: readonly LessonMaterial[];
   className?: string;
 }) {
   if (blocks.length === 0) return null;
   return (
     <div className={`flex max-w-2xl flex-col gap-4 ${className}`}>
       {blocks.map((block) => (
-        <BlockView key={block.id} block={block} videos={videos} />
+        <BlockView key={block.id} block={block} videos={videos} materials={materials} />
       ))}
     </div>
   );
@@ -78,9 +87,11 @@ export function LessonBlocks({
 function BlockView({
   block,
   videos,
+  materials,
 }: {
   block: LessonBlock;
   videos: readonly LessonVideo[];
+  materials: readonly LessonMaterial[];
 }) {
   switch (block.kind) {
     case "heading":
@@ -199,7 +210,72 @@ function BlockView({
       if (!video) return null;
       return <LessonVideoPlayer video={video} />;
     }
+
+    case "material": {
+      const material = materials.find((m) => m.id === block.materialId);
+      if (!material) return null;
+      return <LessonMaterialCard material={material} />;
+    }
   }
+}
+
+/** How each material kind is named wherever one is listed. */
+export const MATERIAL_LABELS: Record<LessonMaterialKind, string> = {
+  reading: "Reading",
+  worksheet: "Worksheet",
+  slides: "Slides",
+  dataset: "Data set",
+  reference: "Reference sheet",
+  manipulative: "Hands-on material",
+};
+
+/**
+ * One material, with what to do with it and how to get it another way.
+ *
+ * The purpose and the access note are on the card rather than behind a hover:
+ * a student deciding whether to open a file should not have to open it to find
+ * out what it is for (CLAUDE.md §12, §13).
+ */
+export function LessonMaterialCard({ material }: { material: LessonMaterial }) {
+  return (
+    <div className="rounded-xl border border-line p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-sm font-semibold text-ink">{material.title}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          {MATERIAL_LABELS[material.kind]}
+          {material.minutes ? ` · ${material.minutes} min` : ""}
+        </p>
+      </div>
+      <p className="mt-1.5 text-sm text-ink">{material.purpose}</p>
+      <p className="mt-1.5 text-xs text-ink-muted">{material.accessNote}</p>
+      <a
+        href={material.url}
+        target="_blank"
+        rel="noreferrer"
+        className={`mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
+      >
+        Open {MATERIAL_LABELS[material.kind].toLowerCase()}
+        <span aria-hidden="true">&rarr;</span>
+        <span className="sr-only">(opens in a new tab)</span>
+      </a>
+    </div>
+  );
+}
+
+/** Every material on a lesson, listed together. */
+export function LessonMaterialList({
+  materials,
+}: {
+  materials: readonly LessonMaterial[];
+}) {
+  if (materials.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      {materials.map((material) => (
+        <LessonMaterialCard key={material.id} material={material} />
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -264,5 +340,7 @@ export function blockSummary(block: LessonBlock): ReactNode {
       return block.caption || block.alt;
     case "video":
       return "Attached video, with its transcript";
+    case "material":
+      return "Attached material, with what it is for";
   }
 }

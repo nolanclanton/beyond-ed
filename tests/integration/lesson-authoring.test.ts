@@ -7,6 +7,7 @@ import {
   submitForReview,
 } from "@/lib/curriculum/authoring";
 import {
+  addLessonMaterial,
   addLessonVideo,
   authoredLesson,
   authoringGate,
@@ -14,6 +15,7 @@ import {
   lessonReadiness,
   moveLessonBlock,
   removeLessonBlock,
+  removeLessonMaterial,
   removeQuizItem,
   saveLessonBlock,
   saveLessonScript,
@@ -85,6 +87,7 @@ function block(overrides: Partial<BlockInput> = {}): BlockInput {
     url: "",
     alt: "",
     videoId: "",
+    materialId: "",
     reason: "Writing the canvas.",
     ...overrides,
   };
@@ -339,6 +342,100 @@ describe("video is a reference plus a transcript (CLAUDE.md §12)", () => {
 
     saveLessonBlock(user("u_haddad"), block(), "k-r-4");
     expect(lessonReadiness(DRAFT, LESSON).complete).toBe(true);
+  });
+});
+
+describe("materials are a reference plus a way in (CLAUDE.md §12)", () => {
+  beforeEach(() => {
+    clearDatabase();
+    ensureSeeded();
+  });
+
+  function material(overrides: Record<string, unknown> = {}) {
+    return {
+      versionId: DRAFT,
+      lessonCode: LESSON,
+      kind: "worksheet" as const,
+      title: "Unit-price comparison sheet",
+      url: "https://materials.example.org/unit-price.pdf",
+      purpose: "Fill in the price per ounce, then decide which package is the better buy.",
+      accessNote:
+        "Tagged PDF, readable by a screen reader. A large-print copy is in the classroom folder.",
+      minutes: 10,
+      reason: "Added the comparison sheet the pilot classes asked for.",
+      ...overrides,
+    };
+  }
+
+  it("attaches a material with what it is for and how else to get it", () => {
+    const saved = addLessonMaterial(user("u_haddad"), material(), "mat-1-xxxxxxxx");
+    expect(saved.kind).toBe("worksheet");
+    expect(saved.source).toBe("url");
+    expect(authoredLesson(DRAFT, LESSON)?.materials).toHaveLength(1);
+    expect(
+      auditForTarget("authored_lesson", authoredLesson(DRAFT, LESSON)!.id).some(
+        (e) => e.action === "curriculum.lesson_material_added",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses a material with no purpose, and one with no access note", () => {
+    expect(() =>
+      addLessonMaterial(user("u_haddad"), material({ purpose: "  " }), "mat-2-xxxxxxxx"),
+    ).toThrow(/what the student does/i);
+    expect(() =>
+      addLessonMaterial(user("u_haddad"), material({ accessNote: "" }), "mat-3-xxxxxxxx"),
+    ).toThrow(/access note/i);
+    expect(authoredLesson(DRAFT, LESSON)).toBeUndefined();
+  });
+
+  it("places a material on the canvas and refuses to strand the block", () => {
+    const saved = addLessonMaterial(user("u_haddad"), material(), "mat-4-xxxxxxxx");
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ kind: "material", materialId: saved.id }),
+      "mat-5-xxxxxxxx",
+    );
+    expect(authoredLesson(DRAFT, LESSON)?.blocks[0].kind).toBe("material");
+
+    expect(() =>
+      removeLessonMaterial(
+        user("u_haddad"),
+        {
+          versionId: DRAFT,
+          lessonCode: LESSON,
+          materialId: saved.id,
+          reason: "Should be refused while a block places it.",
+        },
+        "mat-6-xxxxxxxx",
+      ),
+    ).toThrow(/canvas places this material/);
+    expect(authoredLesson(DRAFT, LESSON)?.materials).toHaveLength(1);
+  });
+
+  it("a material block cannot reference a material the lesson does not have", () => {
+    expect(() =>
+      saveLessonBlock(
+        user("u_haddad"),
+        block({ kind: "material", materialId: "am_9999" }),
+        "mat-7-xxxxxxxx",
+      ),
+    ).toThrow(/Attach the material to this lesson first/);
+  });
+
+  it("materials reach the student only through publication", () => {
+    const saved = addLessonMaterial(user("u_haddad"), material(), "mat-8-xxxxxxxx");
+    saveLessonScript(user("u_haddad"), script(), "mat-9-xxxxxxxx");
+    expect(resolveLessonContent(DRAFT, LESSON).materials).toHaveLength(0);
+
+    submitForReview(user("u_haddad"), DRAFT, "Ready.", "mat-10-xxxxxxxx");
+    approveVersion(user("u_haddad"), DRAFT, "Approved.", "mat-11-xxxxxxxx");
+    publishVersion(user("u_haddad"), DRAFT, "Published.", "mat-12-xxxxxxxx");
+
+    const resolved = resolveLessonContent(DRAFT, LESSON);
+    expect(resolved.materials).toHaveLength(1);
+    expect(resolved.materials[0].id).toBe(saved.id);
+    expect(resolved.materials[0].accessNote.length).toBeGreaterThan(0);
   });
 });
 

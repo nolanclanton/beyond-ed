@@ -33,6 +33,8 @@ export function toFailure(error: unknown): {
     "GradeError",
     "CurriculumError",
     "LessonAuthoringError",
+    "StructureError",
+    "FoundationError",
     "ObservationError",
     "ExportError",
     "NotAuthorizedError",

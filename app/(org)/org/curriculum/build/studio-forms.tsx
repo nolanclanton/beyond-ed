@@ -3,24 +3,29 @@
 import { useState } from "react";
 
 import {
+  addLessonMaterialAction,
   addLessonVideoAction,
   createDraftVersionAction,
   moveLessonBlockAction,
   removeLessonBlockAction,
+  removeLessonMaterialAction,
   removeLessonVideoAction,
   removeQuizItemAction,
   saveLessonBlockAction,
   saveLessonScriptAction,
   saveQuizItemAction,
 } from "@/lib/actions/lesson-authoring";
+import { MATERIAL_KINDS } from "@/lib/curriculum/lesson-authoring";
 import type {
   AuthoredLesson,
   AuthoredQuizItem,
   ItemPurpose,
   LessonBlock,
+  LessonMaterial,
   LessonVideo,
 } from "@/lib/db/types";
 import { ActionForm } from "@/lib/design/action-form";
+import { MATERIAL_LABELS } from "@/lib/design/lesson-blocks";
 import { Button } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
 
@@ -262,6 +267,11 @@ const KINDS: { value: LessonBlock["kind"]; label: string; hint: string }[] = [
   { value: "table", label: "Table", hint: "A comparison a paragraph would hide." },
   { value: "image", label: "Image", hint: "A diagram or photograph." },
   { value: "video", label: "Video", hint: "A video already attached to this lesson." },
+  {
+    value: "material",
+    label: "Material",
+    hint: "A reading, worksheet, data set, or reference sheet already attached to this lesson.",
+  },
 ];
 
 const TONES: { value: string; label: string; hint: string }[] = [
@@ -287,6 +297,7 @@ export function BlockForm({
   versionId,
   lessonCode,
   videos,
+  materials,
   block,
   seq,
   onDone,
@@ -294,6 +305,7 @@ export function BlockForm({
   versionId: string;
   lessonCode: string;
   videos: readonly LessonVideo[];
+  materials: readonly LessonMaterial[];
   block?: LessonBlock;
   seq: number;
   onDone?: () => void;
@@ -320,7 +332,9 @@ export function BlockForm({
             <div className="mt-2 flex flex-wrap gap-2">
               {KINDS.map((option) => {
                 const active = option.value === kind;
-                const disabled = option.value === "video" && videos.length === 0;
+                const disabled =
+                  (option.value === "video" && videos.length === 0) ||
+                  (option.value === "material" && materials.length === 0);
                 return (
                   <button
                     key={option.value}
@@ -330,7 +344,7 @@ export function BlockForm({
                     onClick={() => setKind(option.value)}
                     title={
                       disabled
-                        ? "Attach a video to this lesson first."
+                        ? `Attach a ${option.value} to this lesson first.`
                         : option.hint
                     }
                     className={`rounded-full border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING} ${
@@ -570,6 +584,27 @@ export function BlockForm({
             </Field>
           ) : null}
 
+          {kind === "material" ? (
+            <Field
+              label="Which material"
+              htmlFor={id("materialId")}
+              hint="What it is for and how else to get it travel with it."
+            >
+              <select
+                id={id("materialId")}
+                name="materialId"
+                defaultValue={block?.kind === "material" ? block.materialId : ""}
+                className={FIELD}
+              >
+                {materials.map((material) => (
+                  <option key={material.id} value={material.id}>
+                    {MATERIAL_LABELS[material.kind]} — {material.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
+
           <ReasonField
             id={id("reason")}
             placeholder={
@@ -599,11 +634,13 @@ export function AddBlockPanel({
   versionId,
   lessonCode,
   videos,
+  materials,
   seq,
 }: {
   versionId: string;
   lessonCode: string;
   videos: readonly LessonVideo[];
+  materials: readonly LessonMaterial[];
   seq: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -623,6 +660,7 @@ export function AddBlockPanel({
             versionId={versionId}
             lessonCode={lessonCode}
             videos={videos}
+            materials={materials}
             seq={seq}
           />
         </div>
@@ -636,11 +674,13 @@ export function EditBlockPanel({
   versionId,
   lessonCode,
   videos,
+  materials,
   block,
 }: {
   versionId: string;
   lessonCode: string;
   videos: readonly LessonVideo[];
+  materials: readonly LessonMaterial[];
   block: LessonBlock;
 }) {
   const [open, setOpen] = useState(false);
@@ -660,6 +700,7 @@ export function EditBlockPanel({
             versionId={versionId}
             lessonCode={lessonCode}
             videos={videos}
+            materials={materials}
             block={block}
             seq={0}
           />
@@ -893,6 +934,210 @@ export function AddVideoForm({
         </ActionForm>
       ) : null}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Materials
+// ---------------------------------------------------------------------------
+
+/**
+ * Attaches a reading, worksheet, data set, or reference sheet.
+ *
+ * Two required fields carry the weight. `purpose` is what the student does with
+ * it — a link with no task attached is noise on a page someone is trying to
+ * work through. `accessNote` is the format and the way in for a student who
+ * cannot open it, which is the same rule that makes alternative text required
+ * on an image (CLAUDE.md §12).
+ */
+export function AddMaterialForm({
+  versionId,
+  lessonCode,
+  count,
+}: {
+  versionId: string;
+  lessonCode: string;
+  count: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = (name: string) => `material-${lessonCode}-${name}`;
+
+  return (
+    <div>
+      <Button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? "Close" : "Attach a material"}
+      </Button>
+      {open ? (
+        <ActionForm
+          className="mt-3"
+          action={addLessonMaterialAction}
+          idempotencyKey={`lesson-material:${versionId}:${lessonCode}:${count}`}
+        >
+          {(pending) => (
+            <>
+              <input type="hidden" name="versionId" value={versionId} />
+              <input type="hidden" name="lessonCode" value={lessonCode} />
+
+              <Field
+                label="What kind of material?"
+                htmlFor={id("kind")}
+                hint="Students see this word, so they know what they are opening before they open it."
+              >
+                <select id={id("kind")} name="kind" required defaultValue="reading" className={FIELD}>
+                  {MATERIAL_KINDS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} — {option.meaning}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Title" htmlFor={id("title")}>
+                <input
+                  id={id("title")}
+                  name="title"
+                  required
+                  maxLength={200}
+                  placeholder="Grocery unit-price comparison sheet"
+                  className={FIELD}
+                />
+              </Field>
+
+              <Field
+                label="Material address"
+                htmlFor={id("url")}
+                hint="The https address of the file. This build stores the reference, not the file."
+              >
+                <input
+                  id={id("url")}
+                  name="url"
+                  type="url"
+                  required
+                  maxLength={2000}
+                  placeholder="https://materials.example.org/unit-price.pdf"
+                  className={FIELD}
+                />
+              </Field>
+
+              <Field
+                label="What does the student do with it?"
+                htmlFor={id("purpose")}
+                hint="Required. One sentence, addressed to the student."
+              >
+                <textarea
+                  id={id("purpose")}
+                  name="purpose"
+                  rows={2}
+                  required
+                  maxLength={600}
+                  placeholder="Fill in the price per ounce for each package, then decide which is the better buy."
+                  className={FIELD}
+                />
+              </Field>
+
+              <Field
+                label="How else can a student get it?"
+                htmlFor={id("access")}
+                hint="Required. The format, and the way in for a student who cannot open that format."
+              >
+                <textarea
+                  id={id("access")}
+                  name="accessNote"
+                  rows={2}
+                  required
+                  maxLength={600}
+                  placeholder="Tagged PDF, readable by a screen reader. A large-print copy is in the classroom folder."
+                  className={FIELD}
+                />
+              </Field>
+
+              <Field label="Minutes it takes (optional)" htmlFor={id("minutes")}>
+                <input
+                  id={id("minutes")}
+                  name="minutes"
+                  type="number"
+                  min={0}
+                  max={600}
+                  className={FIELD}
+                />
+              </Field>
+
+              <ReasonField
+                id={id("reason")}
+                placeholder="Added the comparison sheet the pilot classes asked for."
+              />
+
+              <div>
+                <Button emphasis="primary" disabled={pending}>
+                  {pending ? "Attaching…" : "Attach material"}
+                </Button>
+              </div>
+            </>
+          )}
+        </ActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+export function RemoveMaterialForm({
+  versionId,
+  lessonCode,
+  materialId,
+  title,
+}: {
+  versionId: string;
+  lessonCode: string;
+  materialId: string;
+  title: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className={`text-xs font-semibold text-urgent underline-offset-4 hover:underline ${FOCUS_RING}`}
+      >
+        Remove
+      </button>
+    );
+  }
+  return (
+    <ActionForm
+      action={removeLessonMaterialAction}
+      idempotencyKey={`lesson-material-remove:${versionId}:${lessonCode}:${materialId}`}
+    >
+      {(pending) => (
+        <>
+          <input type="hidden" name="versionId" value={versionId} />
+          <input type="hidden" name="lessonCode" value={lessonCode} />
+          <input type="hidden" name="materialId" value={materialId} />
+          <Field
+            label={`Reason for removing “${title}”`}
+            htmlFor={`rm-material-${materialId}`}
+            hint="Recorded on the audit event."
+          >
+            <input
+              id={`rm-material-${materialId}`}
+              name="reason"
+              required
+              minLength={4}
+              maxLength={500}
+              className={FIELD}
+            />
+          </Field>
+          <div className="flex gap-3">
+            <Button emphasis="caution" disabled={pending}>
+              {pending ? "Removing…" : "Remove material"}
+            </Button>
+            <Button type="button" emphasis="quiet" onClick={() => setConfirming(false)}>
+              Keep it
+            </Button>
+          </div>
+        </>
+      )}
+    </ActionForm>
   );
 }
 

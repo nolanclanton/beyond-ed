@@ -33,6 +33,7 @@ import type {
   AuthoredLesson,
   AuthoredQuizItem,
   ItemPurpose,
+  LessonMaterial,
   LessonVideo,
 } from "@/lib/db/types";
 
@@ -42,6 +43,8 @@ export type ResolvedLesson = {
   source: ContentSource;
   content: LessonContent | null;
   videos: LessonVideo[];
+  /** Readings, worksheets, and reference sheets the lesson hands the student. */
+  materials: LessonMaterial[];
   /** The version the content came from, for the label a student sees. */
   versionLabel: string | null;
 };
@@ -90,14 +93,27 @@ export function resolveLessonContent(
       source: "authored",
       content: asLessonContent(authored),
       videos: authored.videos,
+      materials: authored.materials,
       versionLabel: version ? `${version.courseTitle} ${version.version}` : null,
     };
   }
   const demo = demoLessonContent(lessonCode);
   if (demo) {
-    return { source: "demo", content: demo, videos: [], versionLabel: null };
+    return {
+      source: "demo",
+      content: demo,
+      videos: [],
+      materials: [],
+      versionLabel: null,
+    };
   }
-  return { source: "none", content: null, videos: [], versionLabel: null };
+  return {
+    source: "none",
+    content: null,
+    videos: [],
+    materials: [],
+    versionLabel: null,
+  };
 }
 
 /** An authored item in the same shape as the demo bank, so scoring is one path. */

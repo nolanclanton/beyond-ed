@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import {
   courseSlug,
-  findLesson,
   getCourse,
   lessonEvidence,
   lessonPosition,
@@ -13,6 +12,7 @@ import {
   subjectForLesson,
 } from "@/lib/curriculum/catalog";
 import { resolvePrerequisites } from "@/lib/curriculum/prerequisites";
+import { effectiveCourse, locateInCourse } from "@/lib/curriculum/structure";
 import { describeStandard } from "@/lib/curriculum/standards";
 import {
   alignableStandards,
@@ -39,18 +39,21 @@ import {
   BLOCK_LABELS,
   blockSummary,
   LessonBlocks,
+  LessonMaterialCard,
   LessonVideoPlayer,
 } from "@/lib/design/lesson-blocks";
 import { FOCUS_RING } from "@/lib/design/tokens";
 
 import {
   AddBlockPanel,
+  AddMaterialForm,
   AddVideoForm,
   EditBlockPanel,
   MoveBlockForm,
   QuizItemForm,
   RemoveBlockForm,
   RemoveItemForm,
+  RemoveMaterialForm,
   RemoveVideoForm,
   ScriptForm,
 } from "../../studio-forms";
@@ -88,9 +91,11 @@ export default async function LessonEditorPage({
     notFound();
   }
   const version = gate.version;
-  const course = getCourse(version.courseTitle);
-  if (!course) notFound();
-  const found = findLesson(course, lessonCode);
+  if (!getCourse(version.courseTitle)) notFound();
+  // The order THIS version runs in, so the day and the arc position shown here
+  // are the ones a student will meet (`lib/curriculum/structure.ts`).
+  const course = effectiveCourse(version);
+  const found = locateInCourse(course, lessonCode);
   if (!found) notFound();
 
   const lesson = found.lesson;
@@ -105,6 +110,7 @@ export default async function LessonEditorPage({
   const prerequisites = resolvePrerequisites(lesson.code);
   const blocks = draft?.blocks ?? [];
   const videos = draft?.videos ?? [];
+  const materials = draft?.materials ?? [];
 
   const at = unit.lessons.findIndex((l) => l.code === lesson.code);
   const previous = at > 0 ? unit.lessons[at - 1] : null;
@@ -385,6 +391,7 @@ export default async function LessonEditorPage({
                             versionId={version.id}
                             lessonCode={lessonCode}
                             videos={videos}
+                            materials={materials}
                             block={block}
                           />
                           <RemoveBlockForm
@@ -405,6 +412,7 @@ export default async function LessonEditorPage({
                     versionId={version.id}
                     lessonCode={lessonCode}
                     videos={videos}
+                    materials={materials}
                     seq={blocks.length}
                   />
                 </div>
@@ -421,7 +429,7 @@ export default async function LessonEditorPage({
               {blocks.length === 0 ? (
                 <Empty>Add a block and it appears here.</Empty>
               ) : (
-                <LessonBlocks blocks={blocks} videos={videos} />
+                <LessonBlocks blocks={blocks} videos={videos} materials={materials} />
               )}
             </div>
           </Card>
@@ -488,6 +496,75 @@ export default async function LessonEditorPage({
                   versionId={version.id}
                   lessonCode={lessonCode}
                   count={videos.length}
+                />
+              </div>
+            ) : null}
+          </div>
+        </Card>
+      </section>
+
+      <section aria-labelledby="materials" className="mt-10">
+        <SectionHeading
+          id="materials"
+          hint="Readings, worksheets, data sets, and reference sheets. Attach one here, then place it on the canvas where the student needs it."
+        >
+          Materials ({materials.length})
+        </SectionHeading>
+
+        <Card>
+          <div className="p-5">
+            {materials.length === 0 ? (
+              <Empty>
+                No material attached. Beyond.Ed stores the address, what the
+                student does with it, and how else to get it — not the file.
+              </Empty>
+            ) : (
+              <ul className="flex flex-col gap-4">
+                {materials.map((material) => {
+                  const placed = blocks.some(
+                    (b) => b.kind === "material" && b.materialId === material.id,
+                  );
+                  return (
+                    <li key={material.id} className="rounded-lg border border-line p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink">
+                            {material.title}
+                          </p>
+                          <p className="mt-0.5 break-all font-mono text-xs text-ink-muted">
+                            {material.url}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <StatusChip
+                            label={placed ? "On the canvas" : "Not placed yet"}
+                            tone={placed ? "positive" : "neutral"}
+                          />
+                          {gate.editable ? (
+                            <RemoveMaterialForm
+                              versionId={version.id}
+                              lessonCode={lessonCode}
+                              materialId={material.id}
+                              title={material.title}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <LessonMaterialCard material={material} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {gate.editable ? (
+              <div className="mt-5">
+                <AddMaterialForm
+                  versionId={version.id}
+                  lessonCode={lessonCode}
+                  count={materials.length}
                 />
               </div>
             ) : null}

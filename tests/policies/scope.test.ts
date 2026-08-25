@@ -20,11 +20,25 @@ import {
   submitForReview,
 } from "@/lib/curriculum/authoring";
 import {
+  addLessonMaterial,
   authoredLesson,
   authoringGate,
   saveLessonBlock,
   saveLessonScript,
 } from "@/lib/curriculum/lesson-authoring";
+import {
+  addFoundation,
+  foundationsFor,
+  setFoundationImportance,
+} from "@/lib/curriculum/foundations";
+import { prerequisitesFor } from "@/lib/curriculum/prerequisites";
+import {
+  effectiveCourse,
+  moveUnit,
+  structureFor,
+  structureGate,
+  versionRecord,
+} from "@/lib/curriculum/structure";
 import { resolveLessonContent } from "@/lib/curriculum/lesson-bank";
 import { ensureSeeded } from "@/lib/db/seed";
 import { clearDatabase, db } from "@/lib/db/store";
@@ -317,6 +331,7 @@ describe("authored lesson content: author authorization and the draft rule", () 
     url: "",
     alt: "",
     videoId: "",
+    materialId: "",
     reason: "Policy test.",
   });
 
@@ -373,5 +388,115 @@ describe("authored lesson content: author authorization and the draft rule", () 
     // Reading is not gated on the authorization: a student needs the lesson
     // their section's version publishes.
     expect(resolveLessonContent(DRAFT, LESSON).source).toBe("authored");
+  });
+});
+
+/**
+ * Curriculum governance — re-sequencing a course and weighting its foundation
+ * map — is the SAME authorization as lesson authoring, checked independently of
+ * role (CLAUDE.md §3). Both are changes to what a class will be taught, so both
+ * carry positive and negative tests.
+ */
+describe("curriculum governance is an authorization, not a hierarchy level", () => {
+  const DRAFT = "cv_Mathematics_6_2026_2";
+  const PUBLISHED = "cv_Mathematics_6_2026_1";
+  const LESSON = "MATH-06-L035";
+  const GOVERNED_LESSON = "MATH-06-L041";
+
+  function firstFoundation() {
+    const p = prerequisitesFor(GOVERNED_LESSON)[0];
+    if (!p) throw new Error("the workbook names no foundation for this lesson");
+    return p.id;
+  }
+
+  it("POSITIVE: an author re-sequences a draft and weights its foundations", () => {
+    const unit = effectiveCourse(versionRecord(DRAFT)).units[1];
+    moveUnit(
+      user("u_haddad"),
+      { versionId: DRAFT, unitId: unit.id, direction: "up", reason: "Pilot order." },
+      "pol-gov-1",
+    );
+    expect(effectiveCourse(versionRecord(DRAFT)).units[0].id).toBe(unit.id);
+
+    setFoundationImportance(
+      user("u_haddad"),
+      {
+        versionId: DRAFT,
+        lessonCode: GOVERNED_LESSON,
+        targetId: firstFoundation(),
+        importance: 5,
+        note: "",
+        reason: "Evidence shows students stall here without it.",
+      },
+      "pol-gov-2",
+    );
+    expect(
+      foundationsFor(DRAFT, GOVERNED_LESSON).find((f) => f.targetId === firstFoundation())
+        ?.importance,
+    ).toBe(5);
+    expect(structureGate(user("u_haddad"), DRAFT).editable).toBe(true);
+  });
+
+  it("NEGATIVE: an org admin without the authorization changes no structure", () => {
+    const unit = effectiveCourse(versionRecord(DRAFT)).units[1];
+    expect(canAuthorCurriculum(user("u_okonjo"))).toBe(false);
+
+    expect(() =>
+      moveUnit(
+        user("u_okonjo"),
+        { versionId: DRAFT, unitId: unit.id, direction: "up", reason: "No." },
+        "pol-gov-3",
+      ),
+    ).toThrow();
+    expect(() =>
+      addFoundation(
+        user("u_okonjo"),
+        {
+          versionId: DRAFT,
+          lessonCode: GOVERNED_LESSON,
+          targetId: firstFoundation(),
+          importance: 4,
+          note: "",
+          reason: "No.",
+        },
+        "pol-gov-4",
+      ),
+    ).toThrow();
+
+    expect(structureFor(DRAFT)).toBeUndefined();
+    expect(structureGate(user("u_okonjo"), DRAFT).editable).toBe(false);
+  });
+
+  it("NEGATIVE: not even an author re-sequences a published version", () => {
+    const unit = effectiveCourse(versionRecord(PUBLISHED)).units[1];
+    expect(() =>
+      moveUnit(
+        user("u_haddad"),
+        { versionId: PUBLISHED, unitId: unit.id, direction: "up", reason: "No." },
+        "pol-gov-5",
+      ),
+    ).toThrow(/draft/);
+    expect(structureGate(user("u_haddad"), PUBLISHED).editable).toBe(false);
+  });
+
+  it("NEGATIVE: an administrator without the authorization attaches no material", () => {
+    expect(() =>
+      addLessonMaterial(
+        user("u_okonjo"),
+        {
+          versionId: DRAFT,
+          lessonCode: LESSON,
+          kind: "reading",
+          title: "Unit price comparison",
+          url: "https://materials.example.org/unit-price.pdf",
+          purpose: "Compare the two package sizes.",
+          accessNote: "Tagged PDF; a large-print copy is in the classroom folder.",
+          minutes: 10,
+          reason: "No.",
+        },
+        "pol-gov-6",
+      ),
+    ).toThrow();
+    expect(authoredLesson(DRAFT, LESSON)).toBeUndefined();
   });
 });

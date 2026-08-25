@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
 import { courseSlug, getCourse } from "@/lib/curriculum/catalog";
+import { effectiveCourse } from "@/lib/curriculum/structure";
 import { CURRICULUM_STATUS_PRESENTATION } from "@/lib/curriculum/publication";
 import {
   authoredLesson,
@@ -48,8 +49,10 @@ export default async function VersionUnitsPage({
     notFound();
   }
   const version = gate.version;
-  const course = getCourse(version.courseTitle);
-  if (!course) notFound();
+  // The order THIS version runs in, not the workbook's — an author builds the
+  // course their students will meet (`lib/curriculum/structure.ts`).
+  if (!getCourse(version.courseTitle)) notFound();
+  const course = effectiveCourse(version);
 
   const presentation = CURRICULUM_STATUS_PRESENTATION[version.status];
   const summary = versionAuthoringSummary(version.id);
@@ -107,6 +110,7 @@ export default async function VersionUnitsPage({
               { value: `${summary.lessonsComplete}`, label: "Ready for students" },
               { value: `${summary.blocks}`, label: "Canvas blocks" },
               { value: `${summary.videos}`, label: "Videos" },
+              { value: `${summary.materials}`, label: "Materials" },
               { value: `${summary.items}`, label: "Quiz items" },
             ]}
           />
@@ -200,6 +204,14 @@ export default async function VersionUnitsPage({
           className={`font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
         >
           the course catalog
+        </Link>
+        . The order this version runs in, and which learning it treats as
+        foundational, are governed in{" "}
+        <Link
+          href={`/org/curriculum/matrix/${courseSlug(course)}?version=${version.id}`}
+          className={`font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
+        >
+          the curriculum matrix
         </Link>
         .
       </p>

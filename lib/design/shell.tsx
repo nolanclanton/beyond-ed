@@ -150,6 +150,7 @@ export const SITE_NAV: NavItem[] = [
 export const ORG_NAV: NavItem[] = [
   { label: "Organization", href: "/org" },
   { label: "Courses", href: "/org/curriculum/courses" },
+  { label: "Matrix", href: "/org/curriculum/matrix" },
   { label: "Lesson studio", href: "/org/curriculum/build" },
   { label: "Versions", href: "/org/curriculum" },
   { label: "Intervention system", href: "/org/intervention" },

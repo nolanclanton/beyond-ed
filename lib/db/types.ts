@@ -270,6 +270,55 @@ export type LessonVideo = {
   addedByUserId: string;
 };
 
+/**
+ * ---------------------------------------------------------------------------
+ * Lesson materials
+ * ---------------------------------------------------------------------------
+ *
+ * The things a student opens alongside the lesson: a reading, a worksheet, a
+ * data set, a reference sheet, a physical manipulative to fetch. A material is
+ * attached to the lesson once and may then be placed anywhere on the canvas, in
+ * exactly the way a video is — so the same file is never described twice and
+ * cannot drift between its two descriptions.
+ *
+ * `purpose` and `accessNote` are both required, for the same reason alternative
+ * text is required on an image: a link with no task attached is noise, and a
+ * material a student cannot open is a lesson they cannot take (CLAUDE.md §12).
+ */
+export const LESSON_MATERIAL_KINDS = [
+  "reading",
+  "worksheet",
+  "slides",
+  "dataset",
+  "reference",
+  "manipulative",
+] as const;
+
+export type LessonMaterialKind = (typeof LESSON_MATERIAL_KINDS)[number];
+
+export type LessonMaterial = {
+  id: string;
+  kind: LessonMaterialKind;
+  title: string;
+  /**
+   * Where it lives. `url` is the only source in this build, for the same reason
+   * a video has only one: binary upload needs Supabase Storage, which is not
+   * provisioned yet (ADR 0002, ADR 0010).
+   */
+  source: "url";
+  url: string;
+  /** What the student does with it. Required. */
+  purpose: string;
+  /**
+   * Required. The format, and how a student who cannot open that format gets
+   * the same content.
+   */
+  accessNote: string;
+  minutes: number | null;
+  addedAt: string;
+  addedByUserId: string;
+};
+
 export type AuthoredChoice = {
   id: string;
   text: string;
@@ -323,6 +372,7 @@ export const LESSON_BLOCK_KINDS = [
   "table",
   "image",
   "video",
+  "material",
 ] as const;
 
 export type LessonBlockKind = (typeof LESSON_BLOCK_KINDS)[number];
@@ -336,7 +386,9 @@ export type LessonBlock =
   | { id: string; kind: "table"; caption: string; headers: string[]; rows: string[][] }
   | { id: string; kind: "image"; url: string; alt: string; caption: string }
   /** References a video already attached to the lesson, by its id. */
-  | { id: string; kind: "video"; videoId: string };
+  | { id: string; kind: "video"; videoId: string }
+  /** References a material already attached to the lesson, by its id. */
+  | { id: string; kind: "material"; materialId: string };
 
 export type AuthoredLesson = {
   id: string;
@@ -362,8 +414,86 @@ export type AuthoredLesson = {
   notesOutline: string[];
 
   videos: LessonVideo[];
+  /** Readings, worksheets, data sets, and reference sheets, attached once. */
+  materials: LessonMaterial[];
   items: AuthoredQuizItem[];
 
+  createdAt: string;
+  updatedAt: string;
+  updatedByUserId: string;
+};
+
+/**
+ * ---------------------------------------------------------------------------
+ * Course structure: sequence and foundations
+ * ---------------------------------------------------------------------------
+ *
+ * The workbook is the baseline for every course: its units, its lesson spine,
+ * and the six pieces of prior learning each lesson names. `pnpm catalog`
+ * ingests it and nothing in the product writes back to the generated files
+ * (CLAUDE.md §7, §14).
+ *
+ * What a curriculum author adapts is recorded HERE instead: one override row
+ * per course version, holding the order a course actually runs in, the framing
+ * a unit is taught under, and the governed strength of each foundation link.
+ * Scoping it to the version is what makes the adaptation safe — a roster
+ * section keeps the version it was created with, so re-sequencing a course
+ * cannot reorder a class already running, and cannot change the structure a
+ * historical calculation resolved against.
+ *
+ * A `null` on `unitOrder` or an absent key in `lessonOrder` means "unchanged
+ * from the workbook". The baseline is never copied in, so a course that has not
+ * been re-sequenced reads as exactly what was ingested.
+ */
+
+/** How strongly one piece of learning is required before another. */
+export type FoundationImportance = 1 | 2 | 3 | 4 | 5;
+
+/**
+ * A governed foundation link.
+ *
+ * `removed` retires a link the workbook records; it does not delete it — the
+ * baseline stays readable, and the override says the course no longer treats it
+ * as prior learning, with the reason on the audit event.
+ */
+export type FoundationEdit = {
+  /** The lesson that depends on something. */
+  lessonCode: string;
+  /** The lesson code or intervention support id it depends on. */
+  targetId: string;
+  removed: boolean;
+  /**
+   * Null until a governor sets it. The workbook records that the link exists
+   * and what role it plays, not how strongly it binds — so an ungoverned link
+   * says so rather than showing an invented number (CLAUDE.md §14).
+   */
+  importance: FoundationImportance | null;
+  /** An author's own note about why this link is what it is. */
+  note: string;
+  changedAt: string;
+  changedByUserId: string;
+};
+
+/** A unit's framing, re-written for one course version. */
+export type UnitFramingEdit = {
+  unitId: string;
+  title: string;
+  essentialQuestion: string;
+  changedAt: string;
+  changedByUserId: string;
+};
+
+export type CourseStructure = {
+  id: string;
+  courseVersionId: string;
+  /** Stable course id from the catalog, e.g. `MATH-06`. */
+  courseId: string;
+  /** Unit ids in the order this version runs them. Null means unchanged. */
+  unitOrder: string[] | null;
+  /** Unit id -> lesson codes in order. An absent key means unchanged. */
+  lessonOrder: Record<string, string[]>;
+  unitFraming: UnitFramingEdit[];
+  foundationEdits: FoundationEdit[];
   createdAt: string;
   updatedAt: string;
   updatedByUserId: string;

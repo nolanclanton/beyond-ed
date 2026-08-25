@@ -42,6 +42,8 @@ import type {
   CourseVersion,
   ItemPurpose,
   LessonBlock,
+  LessonMaterial,
+  LessonMaterialKind,
   LessonVideo,
   User,
 } from "@/lib/db/types";
@@ -207,6 +209,12 @@ export function lessonReadiness(
         "Without items the Exit Ticket cannot be scored, and the lesson shows that plainly rather than faking a result.",
     },
     {
+      label: "Every material says how else to get it",
+      done: (draft?.materials ?? []).every((m) => m.accessNote.trim().length > 0),
+      detail:
+        "A reading or worksheet in one format only is a lesson some students cannot take (CLAUDE.md §12).",
+    },
+    {
       label: "Every video has a transcript",
       done: videosWithoutTranscript.length === 0,
       detail: "Media without a transcript is not accessible (CLAUDE.md §12).",
@@ -221,6 +229,7 @@ export type VersionAuthoringSummary = {
   lessonsStarted: number;
   lessonsComplete: number;
   videos: number;
+  materials: number;
   items: number;
   blocks: number;
 };
@@ -238,6 +247,7 @@ export function versionAuthoringSummary(versionId: string): VersionAuthoringSumm
     lessonsComplete: drafts.filter((d) => lessonReadiness(versionId, d.lessonCode).complete)
       .length,
     videos: drafts.reduce((n, d) => n + d.videos.length, 0),
+    materials: drafts.reduce((n, d) => n + d.materials.length, 0),
     items: drafts.reduce((n, d) => n + d.items.length, 0),
     blocks: drafts.reduce((n, d) => n + d.blocks.length, 0),
   };
@@ -315,6 +325,7 @@ function upsertDraft(
     independentTask: "",
     notesOutline: [],
     videos: [],
+    materials: [],
     items: [],
     createdAt: nextTimestamp(),
     updatedAt: nextTimestamp(),
@@ -335,6 +346,7 @@ function scriptShape(lesson: AuthoredLesson) {
     guidedPractice: lesson.guidedPractice.length,
     notesOutline: lesson.notesOutline.length,
     videos: lesson.videos.length,
+    materials: lesson.materials.length,
     items: lesson.items.length,
   };
 }
@@ -445,6 +457,12 @@ export const BLOCK_KINDS: readonly {
   { value: "table", label: "Table", meaning: "A comparison a paragraph would hide." },
   { value: "image", label: "Image", meaning: "A diagram or photograph. Alternative text is required." },
   { value: "video", label: "Video", meaning: "Places a video already attached to this lesson, with its transcript." },
+  {
+    value: "material",
+    label: "Material",
+    meaning:
+      "Places a reading, worksheet, data set, or reference sheet already attached to this lesson, with what it is for.",
+  },
 ];
 
 export type BlockInput = {
@@ -466,6 +484,7 @@ export type BlockInput = {
   url: string;
   alt: string;
   videoId: string;
+  materialId: string;
   reason: string;
 };
 
@@ -538,6 +557,15 @@ function buildBlock(
         );
       }
       return { id: blockId, kind: "video", videoId: video.id };
+    }
+    case "material": {
+      const material = lesson.materials.find((m) => m.id === input.materialId);
+      if (!material) {
+        throw new LessonAuthoringError(
+          "Attach the material to this lesson first; the canvas places a material it already has, with its purpose and how to get it another way.",
+        );
+      }
+      return { id: blockId, kind: "material", materialId: material.id };
     }
   }
 }
@@ -809,6 +837,14 @@ export function removeLessonVideo(
         if (!lesson) throw new LessonAuthoringError("That lesson has no draft content.");
         const video = lesson.videos.find((v) => v.id === input.videoId);
         if (!video) throw new LessonAuthoringError("That video is not on this lesson.");
+        const placed = lesson.blocks.filter(
+          (b) => b.kind === "video" && b.videoId === input.videoId,
+        ).length;
+        if (placed > 0) {
+          throw new LessonAuthoringError(
+            `The canvas places this video ${placed === 1 ? "once" : `${placed} times`}. Remove ${placed === 1 ? "that block" : "those blocks"} first — detaching it here would leave the lesson with a gap where a student expects the video.`,
+          );
+        }
 
         lesson.videos = lesson.videos.filter((v) => v.id !== input.videoId);
         lesson.updatedAt = nextTimestamp();
@@ -824,6 +860,188 @@ export function removeLessonVideo(
           reason,
           idempotencyKey,
           requestId: requestIdFor("curriculum.lesson_video_removed", idempotencyKey),
+        });
+
+        return lesson;
+      },
+      (existingId) => {
+        const lesson = db().authoredLessons.find((l) => l.id === existingId);
+        if (!lesson) throw new LessonAuthoringError("Duplicate write with no record.");
+        return lesson;
+      },
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Materials
+// ---------------------------------------------------------------------------
+
+/** The material kinds an author can attach, with what each one is for. */
+export const MATERIAL_KINDS: readonly {
+  value: LessonMaterialKind;
+  label: string;
+  meaning: string;
+}[] = [
+  { value: "reading", label: "Reading", meaning: "An article, excerpt, or primary source the student reads." },
+  { value: "worksheet", label: "Worksheet", meaning: "A practice or recording sheet the student writes on." },
+  { value: "slides", label: "Slides", meaning: "A deck the student moves through at their own pace." },
+  { value: "dataset", label: "Data set", meaning: "The numbers, table, or file the task actually works on." },
+  { value: "reference", label: "Reference sheet", meaning: "Something to keep open beside the work — formulas, a word bank, a rubric." },
+  {
+    value: "manipulative",
+    label: "Hands-on material",
+    meaning:
+      "A physical object the student needs to have in front of them. The access note is where you say how to get it.",
+  },
+];
+
+export type MaterialInput = {
+  versionId: string;
+  lessonCode: string;
+  kind: LessonMaterialKind;
+  title: string;
+  url: string;
+  purpose: string;
+  accessNote: string;
+  minutes: number | null;
+  reason: string;
+};
+
+/**
+ * Attaches a material to a lesson.
+ *
+ * Same shape as a video, and for the same reasons: the material is referenced
+ * by URL because uploading the file itself needs Supabase Storage, which this
+ * build does not have (ADR 0002), and it is attached once so the canvas can
+ * place it without describing it a second time.
+ *
+ * `purpose` and `accessNote` are both required. A link with no task attached is
+ * noise on a page a student is trying to work through, and a material that
+ * exists in one format only is a lesson some students cannot take
+ * (CLAUDE.md §12).
+ */
+export function addLessonMaterial(
+  actor: User,
+  input: MaterialInput,
+  idempotencyKey: string,
+): LessonMaterial {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = upsertDraft(version, input.lessonCode, actor);
+
+        const url = normalizeMediaUrl(input.url);
+        const title = input.title.trim();
+        if (title.length === 0) {
+          throw new LessonAuthoringError("A material needs a title students can read.");
+        }
+        const purpose = input.purpose.trim();
+        if (purpose.length === 0) {
+          throw new LessonAuthoringError(
+            "Say what the student does with this material. A link with no task attached is noise.",
+          );
+        }
+        const accessNote = input.accessNote.trim();
+        if (accessNote.length === 0) {
+          throw new LessonAuthoringError(
+            "A material needs an access note: what format it is, and how a student who cannot open that format gets the same content.",
+          );
+        }
+        if (lesson.materials.some((m) => m.url === url)) {
+          throw new LessonAuthoringError(
+            "That material is already attached to this lesson.",
+          );
+        }
+
+        const material: LessonMaterial = {
+          id: nextId("am"),
+          kind: input.kind,
+          title,
+          source: "url",
+          url,
+          purpose,
+          accessNote,
+          minutes: input.minutes && input.minutes > 0 ? input.minutes : null,
+          addedAt: nextTimestamp(),
+          addedByUserId: actor.id,
+        };
+        lesson.materials.push(material);
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: "curriculum.lesson_material_added",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: { materials: lesson.materials.length - 1 },
+          after: {
+            materials: lesson.materials.length,
+            materialId: material.id,
+            kind: material.kind,
+            title: material.title,
+            url: material.url,
+          },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.lesson_material_added", idempotencyKey),
+        });
+
+        return material;
+      },
+      () => {
+        throw new LessonAuthoringError(
+          "That material was already attached by an earlier submission.",
+        );
+      },
+    ),
+  );
+}
+
+export function removeLessonMaterial(
+  actor: User,
+  input: { versionId: string; lessonCode: string; materialId: string; reason: string },
+  idempotencyKey: string,
+): AuthoredLesson {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = authoredLesson(version.id, input.lessonCode);
+        if (!lesson) throw new LessonAuthoringError("That lesson has no draft content.");
+        const material = lesson.materials.find((m) => m.id === input.materialId);
+        if (!material) {
+          throw new LessonAuthoringError("That material is not on this lesson.");
+        }
+        const placed = lesson.blocks.filter(
+          (b) => b.kind === "material" && b.materialId === input.materialId,
+        ).length;
+        if (placed > 0) {
+          throw new LessonAuthoringError(
+            `The canvas places this material ${placed === 1 ? "once" : `${placed} times`}. Remove ${placed === 1 ? "that block" : "those blocks"} first — detaching it here would leave the lesson pointing at something that is no longer there.`,
+          );
+        }
+
+        lesson.materials = lesson.materials.filter((m) => m.id !== input.materialId);
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: "curriculum.lesson_material_removed",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: { materialId: material.id, title: material.title, url: material.url },
+          after: { materials: lesson.materials.length },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.lesson_material_removed", idempotencyKey),
         });
 
         return lesson;

@@ -70,8 +70,9 @@ export const PORTALS: readonly Portal[] = [
     eyebrow: "Curriculum experience",
     name: "Curriculum Portal",
     summary:
-      "Design the lesson a student reads — text, callouts, tables, images, and video — onto a course plan of 38 courses and 5,130 lessons, then move the version through review and publication.",
-    dataNote: "Opens on the catalog, with a Mathematics 6 draft ready to build in.",
+      "Design the lesson a student reads — text, callouts, tables, images, video, and the materials they open — then govern the course itself: the order it runs in, and which learning is foundational for which, across a matrix of 38 courses, 5,130 lessons, and 160 reusable supports.",
+    dataNote:
+      "Opens on the catalog, with a Mathematics 6 draft ready to build in and govern.",
     defaultUserId: "u_haddad",
     cta: "Preview Curriculum Portal",
   },
