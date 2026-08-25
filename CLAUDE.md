@@ -120,6 +120,8 @@ supabase gen types typescript --local > lib/database.types.ts
 pnpm catalog                  # regenerate /lib/curriculum/data from the workbook
 
 git status / diff / log / branch / checkout -b / add / commit
+git push origin <feature-branch>   # any branch except main; produces a preview
+gh pr create / view / list / diff   # opening a PR is encouraged (§11)
 ```
 
 ### Require explicit human approval before running
@@ -140,7 +142,7 @@ git push --force / --force-with-lease
 git reset --hard
 git rebase (on shared branches)
 
-gh pr merge
+gh pr merge                   # merging to main IS a production deploy
 ```
 
 ### Never run — ask the human to do it themselves
@@ -329,10 +331,12 @@ If a task requires generative behavior to be satisfiable, **do not build it.** S
 
 **Production deployment requires explicit human approval, every time.**
 
-- `main` is production-tracked. You may open a PR; you may not merge it and you may not push to `main`.
-- Preview deployments on feature branches are fine and encouraged.
-- Before requesting a production deploy, state: what changed, which migrations run, whether they are reversible, what the rollback is, and which tests passed.
-- **Standing rule for this project: before publishing changes to the live site, show what the changes will look like and do first.** A preview link or screenshots, then approval, then deploy.
+- `main` is production-tracked: pushing to it publishes the live site. Merging a PR to `main`, or pushing to `main`, is a production deployment and needs approval on the same terms as any other — **explicitly, in the conversation, per deploy.** Approval for one deploy is never approval for the next. Without it, open the PR and stop there.
+- Preview deployments on feature branches are fine and encouraged, and need no approval.
+- **Show before you publish.** A preview link or screenshots first, then approval, then deploy. This is the point of the rule: nobody should approve a change to the live site they have not seen.
+- Before asking, state: what changed, which migrations run, whether they are reversible, what the rollback is, and which tests passed.
+- **Never deploy a build whose checks do not pass** (§12), whatever has been approved. A failing build is a fact to report, not a decision to hand over.
+- **What counts as approval.** "Ship it", "merge it", "deploy", or "push to production", said after the preview has been shown, is approval — act on it. A general instruction to push or publish, given before anyone has seen the change, is not: show it first, then ask. If you are unsure which one you are looking at, you are looking at the second.
 - Environment variables are set by a human. Never print, log, or commit a secret.
 
 **Destructive database operations require explicit human approval, every time.** See §2. State the affected tables and estimated row count, confirm a backup exists, and wait for a clear yes. Approval for one operation is never approval for the next.
