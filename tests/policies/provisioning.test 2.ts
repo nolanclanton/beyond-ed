@@ -47,7 +47,6 @@ import type { Role, User } from "@/lib/db/types";
  */
 
 const MIGRATION_SQL = [
-  "supabase/migrations/0020_multiple_roles_one_person.sql",
   "supabase/migrations/0012_account_provisioning.sql",
   "supabase/migrations/0014_provisioning_actions.sql",
   "supabase/migrations/0015_bootstrap_invitation.sql",
@@ -237,83 +236,5 @@ describe("withdrawing access is scoped, and is never a delete", () => {
   it("NEGATIVE: a reason is mandatory, so no withdrawal is unexplained", () => {
     expect(MIGRATION_SQL).toMatch(/users_deactivation_needs_reason/);
     expect(MIGRATION_SQL).toMatch(/invitations_revocation_needs_reason/);
-  });
-});
-
-describe("one person may hold several roles, and act as one at a time", () => {
-  const multi = readFileSync(
-    "supabase/migrations/0020_multiple_roles_one_person.sql",
-    "utf8",
-  );
-
-  it("POSITIVE: a granted role can be switched to", () => {
-    const at = multi.indexOf("function public.switch_active_role");
-    const body = multi.slice(at, multi.indexOf("$$;", at));
-    expect(body).toMatch(/p_role not in \(select public\.roles_held\(v_uid\)\)/);
-    expect(body).toMatch(/update public\.users set active_role = p_role/);
-  });
-
-  it("NEGATIVE: an ungranted role is refused at the switch", () => {
-    const at = multi.indexOf("function public.switch_active_role");
-    const body = multi.slice(at, multi.indexOf("$$;", at));
-    expect(body).toMatch(/You do not hold the % role/);
-    expect(body).toMatch(/insufficient_privilege/);
-  });
-
-  it("NEGATIVE: an ungranted active_role does not take effect anyway", () => {
-    // The property that matters. Every policy in the schema resolves scope
-    // through `current_role_name()`, so if THIS falls back to the primary role
-    // when `active_role` is not genuinely held, all of them fail closed
-    // together — without any of them being rewritten. Verified by execution
-    // against the hosted database: a forged active_role resolved to the
-    // primary role, not the forged one.
-    const at = multi.indexOf("function public.current_role_name");
-    const body = multi.slice(at, multi.indexOf("$$;", at));
-    expect(body).toMatch(/active_role in \(select public\.roles_held\(u\.id\)\)/);
-    expect(body).toMatch(/coalesce\(/);
-  });
-
-  it("NEGATIVE: a client cannot write `users` to change its own role", () => {
-    // There is deliberately no self-update policy on `public.users`. Switching
-    // goes through a SECURITY DEFINER function that touches one column, so the
-    // table carrying role, organization, and site is never client-writable.
-    expect(multi).toMatch(/security definer/);
-    expect(multi).not.toMatch(/create policy users_update_own/);
-  });
-
-  it("NEGATIVE: the primary role and scope stay immutable", () => {
-    const at = multi.indexOf("function public.guard_user_update");
-    const body = multi.slice(at, multi.indexOf("$$;", at));
-    for (const column of ["role", "org_id", "site_id", "grade_level"]) {
-      expect(body, column).toMatch(
-        new RegExp(`new\\.${column} is distinct from old\\.${column}`),
-      );
-    }
-  });
-
-  it("NEGATIVE: only an org admin grants a role, and never to themselves silently", () => {
-    expect(multi).toMatch(
-      /role_grants_insert_org_admin[\s\S]{0,400}granted_by_user_id = auth\.uid\(\)/,
-    );
-    expect(multi).toMatch(
-      /role_grants_insert_org_admin[\s\S]{0,400}current_role_name\(\) = 'org_admin'/,
-    );
-  });
-
-  it("NEGATIVE: a grant is revoked, never deleted, and needs a reason", () => {
-    expect(multi).toMatch(/role_grant_revocation_needs_reason/);
-    expect(multi).toMatch(
-      /create trigger user_role_grants_no_delete[\s\S]{0,140}reject_mutation/,
-    );
-  });
-
-  it("a client can only ask what IT may act as, not what anybody else may", () => {
-    expect(multi).toMatch(/revoke execute on function public\.roles_held\(uuid\)[\s\S]{0,80}authenticated/);
-    expect(multi).toMatch(/grant execute on function public\.my_roles\(\) to authenticated/);
-  });
-
-  it("switching hats is an audited event", () => {
-    expect(multi).toMatch(/'account\.role_switched'/);
-    expect(multi).toMatch(/insert into public\.audit_events/);
   });
 });

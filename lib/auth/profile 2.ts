@@ -28,8 +28,6 @@ type ProfileRow = {
   curriculum_author: boolean;
   grade_level: number | null;
   deactivated_at: string | null;
-  /** The hat currently on. Null means the primary `role`. */
-  active_role: Role | null;
 };
 
 /**
@@ -41,30 +39,16 @@ type ProfileRow = {
  * `tests/unit/supabase-contract.test.ts` checks it against the migration.
  */
 const PROFILE_COLUMNS: string =
-  "id, org_id, site_id, first_name, last_name, role, curriculum_author, grade_level, deactivated_at, active_role";
+  "id, org_id, site_id, first_name, last_name, role, curriculum_author, grade_level, deactivated_at";
 
-/**
- * The profile the application reasons in.
- *
- * `role` is the ACTIVE role, not the primary one — which is the whole seam that
- * made multiple roles possible without touching forty pages. Every layout and
- * every function in `lib/auth/scope.ts` switches on `user.role`, and the
- * database's `current_role_name()` resolves the same way, so the interface and
- * the policies always agree about which hat is on.
- *
- * `primaryRole` is kept for display: it is what the person was provisioned as,
- * and it is the one hat that cannot be taken away without deactivating them.
- */
-export function toUser(row: ProfileRow, heldRoles: Role[] = []): User {
+export function toUser(row: ProfileRow): User {
   return {
     id: row.id,
     orgId: row.org_id,
     siteId: row.site_id,
     firstName: row.first_name,
     lastName: row.last_name,
-    role: row.active_role ?? row.role,
-    primaryRole: row.role,
-    heldRoles: heldRoles.length > 0 ? heldRoles : [row.role],
+    role: row.role,
     curriculumAuthor: row.curriculum_author,
     gradeLevel: row.grade_level,
   };
@@ -107,15 +91,5 @@ export async function loadProfile(
   if (data.deactivated_at) {
     return { kind: "deactivated", reason: data.deactivated_at };
   }
-
-  // `my_roles()` takes no argument and can only answer about `auth.uid()`, so
-  // this cannot be pointed at anybody else. A failure here is not fatal: the
-  // person falls back to the one role their profile names, which is the
-  // narrower outcome and the safe one.
-  const { data: roles } = await supabase.rpc("my_roles");
-  const heldRoles = Array.isArray(roles)
-    ? (roles as Role[]).filter((r): r is Role => typeof r === "string")
-    : [];
-
-  return { kind: "ok", user: toUser(data, heldRoles) };
+  return { kind: "ok", user: toUser(data) };
 }

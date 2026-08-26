@@ -181,40 +181,6 @@ unprovisioned address, a code typed in lower case with a dash, an unaccepted
 provider, an attempt to edit a code, and re-issue after revoke. What was checked
 and when is recorded in the header of `tests/policies/provisioning.test.ts`.
 
-## Amendment, same day — one person, several roles
-
-The first cut gave a profile exactly one role, so somebody who genuinely
-administers a district AND teaches a section needed two accounts on two
-addresses. In a small district that is the common case, and two logins for one
-human splits their audit trail across two actors.
-
-Migration `0020` lets a profile HOLD several roles and ACT AS one at a time.
-
-What is unchanged: the role set is still closed, scope is still hierarchical,
-and every policy still resolves exactly one role, because `current_role_name()`
-still returns exactly one. Nothing gains a union of permissions. §3's own
-sentence about `curriculum_author` — "a separate authorization, not a hierarchy
-level; a user may hold it alongside any role" — is the precedent this
-generalises.
-
-The safety property is where the fallback goes. `active_role` is a request for
-a hat, not the hat itself: `current_role_name()` honours it only if the person
-genuinely holds that role, and otherwise returns their PRIMARY role. Because
-every policy in the schema resolves scope through that one function, making it
-fail closed makes all of them fail closed together, without rewriting any.
-Verified by execution: a profile whose `active_role` was set directly in SQL to
-an ungranted role resolved to its primary role, not the forged one.
-
-`users` has no self-update policy at all. Switching goes through a SECURITY
-DEFINER function that validates and touches one column, so the table carrying
-role, organization, and site is never client-writable. Grants are org-admin
-acts with a recorded reason; revocation is a state transition; the switch
-itself is an audit event, so "which hat were they wearing" is answerable.
-
-`roles_held(uuid)` came off the public API in `0021` — it answers about any
-person, which was right for the internals that call it and wrong as an HTTP
-endpoint. `my_roles()` takes no argument and can only answer about the caller.
-
 ## Consequences
 
 - Nobody reaches this product without an address a district administrator named

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -325,4 +326,48 @@ export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/?signed_out=1");
+}
+
+// ---------------------------------------------------------------------------
+// Changing hats
+// ---------------------------------------------------------------------------
+
+const SwitchRole = z.object({
+  role: z.enum(["student", "teacher", "site_admin", "org_admin", "curriculum_author"]),
+});
+
+/**
+ * Acting as a different role you already hold.
+ *
+ * This grants nothing. `switch_active_role` refuses any role the caller has not
+ * been granted, and `current_role_name()` independently ignores an active role
+ * that is not held — so even a profile whose column was somehow set to
+ * something ungranted resolves to its primary role. Two checks, and the second
+ * is the one every RLS policy in the schema actually depends on.
+ *
+ * The switch is audited, because which hat somebody was wearing is exactly what
+ * an audit reader needs to know.
+ */
+export async function switchRoleAction(formData: FormData): Promise<void> {
+  const state = await sessionState();
+  const home =
+    state.kind === "signed_in" ? ROLE_PRESENTATION[state.user.role].home : "/";
+
+  const parsed = SwitchRole.safeParse({ role: formData.get("role") });
+  if (!parsed.success) redirect(home);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("switch_active_role", {
+    p_role: parsed.data.role,
+  });
+
+  // Returning to where they were is the whole failure story. The switcher only
+  // ever offers roles `my_roles()` confirmed, so reaching this line means the
+  // grant was revoked between the page rendering and the click — rare, already
+  // handled correctly (they keep the role they had), and not worth an error
+  // surface on every page to explain.
+  if (error) redirect(home);
+
+  revalidatePath("/", "layout");
+  redirect(ROLE_PRESENTATION[parsed.data.role].home);
 }

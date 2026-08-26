@@ -28,7 +28,20 @@ export type User = {
   siteId: string | null;
   firstName: string;
   lastName: string;
+  /**
+   * The role this person is ACTING AS right now. Every scope decision in the
+   * application reads this, and it matches what `current_role_name()` resolves
+   * in the database, so the interface and the policies never disagree.
+   */
   role: Role;
+  /**
+   * What they were provisioned as. The one role that cannot be revoked without
+   * deactivating the profile. Optional so the seeded store, which knows nothing
+   * about grants, keeps type-checking.
+   */
+  primaryRole?: Role;
+  /** Every role they may switch to, including the primary one. */
+  heldRoles?: Role[];
   /**
    * Curriculum authoring is a separate authorization, not a hierarchy level
    * (CLAUDE.md §3). A user may hold it alongside any role.

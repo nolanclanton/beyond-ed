@@ -208,87 +208,72 @@ supabase gen types typescript --linked > lib/database.types.ts
 
 ---
 
-## 4. Your account — already created
+## 4. Your accounts — already created
 
-**One address, all five portals.**
+Beyond.Ed gives each person exactly one role: `users.role` is a single column,
+and one address may hold only one account. To reach all five workspaces you
+need five accounts, so they are set up on **Gmail plus-addresses**, which all
+deliver to your normal `nolan20823@gmail.com` inbox.
 
-| | |
-|---|---|
-| Email | `nolan20823@gmail.com` |
-| **Setup code** | **`FPCA 7R2M`** |
-| Primary role | Organization administrator |
-| Also granted | Teacher, Site administrator, Student (grade 9), Curriculum author |
-| Curriculum authoring | Yes |
+**Waiting for you now:**
 
-Set it up once — **Set up my account**, that address, that code, a password you
-choose — and you land on `/org`. After that, the app bar carries an **"Acting
-as …"** control listing all five. Pick one and you are in that workspace, with
-exactly that role's scope.
+| Address | Workspace | Setup code |
+|---|---|---|
+| `nolan20823@gmail.com` | Organization admin **+ curriculum author** → `/org` | **`PUD9 H6D6`** |
 
-The code changed again because an invitation's role set is fixed when it is
-issued; adding roles meant revoking and re-issuing. `PUD9H6D6` no longer works.
+That first account covers two of the five things you asked for: curriculum
+authoring is a separate *authorization*, not a rank (CLAUDE.md §3), so an
+organization administrator who holds it reaches every curriculum surface
+without needing a second login.
 
-### How this works, and what it does not do
+### The other four
 
-You act as **one role at a time**. Switching is explicit, it is recorded as an
-audit event, and nothing is combined — acting as a teacher gives you teacher
-scope and only that. The database decides: `switch_active_role` refuses a role
-you were not granted, and `current_role_name()` independently ignores an active
-role that is not genuinely held, falling back to your primary role. That second
-check is the one every policy in the schema depends on, so if it fails it fails
-closed everywhere at once.
+They cannot be created until the first one exists, and that is the invitation
+gate doing its job: every invitation records who issued it, and until you claim
+your account there is nobody to record. So claim the account above first, then
+either:
 
-Your primary role is `org_admin`, and it is the one that cannot be revoked
-without deactivating the whole profile. The other four are grants, and an
-organization administrator can revoke any of them with a reason.
+**Use the portal** (preferred — scope-checked, and each one writes an audit
+event with your name and reason): Organization → **Accounts**.
 
-A note on the student hat: you are enrolled in nothing, so `/today` will show
+**Or paste this once** into the Supabase SQL editor. It resolves the inviter
+itself, and `returning` hands you the four setup codes:
+
+```sql
+insert into public.account_invitations (
+  org_id, site_id, email, role, first_name, last_name, grade_level,
+  invited_by_user_id
+)
+select
+  (select id from public.organizations limit 1),
+  case when v.role in ('org_admin','curriculum_author') then null
+       else (select id from public.sites limit 1) end,
+  v.email, v.role::public.user_role, v.first_name, v.last_name, v.grade,
+  (select id from public.users where role = 'org_admin' limit 1)
+from (values
+  ('nolan20823+teacher@gmail.com',    'teacher',           'Nolan', 'Clanton (Teacher)',    null::smallint),
+  ('nolan20823+siteadmin@gmail.com',  'site_admin',        'Nolan', 'Clanton (Site admin)', null::smallint),
+  ('nolan20823+student@gmail.com',    'student',           'Nolan', 'Clanton (Student)',    9::smallint),
+  ('nolan20823+curriculum@gmail.com', 'curriculum_author', 'Nolan', 'Clanton (Curriculum)', null::smallint)
+) as v(email, role, first_name, last_name, grade)
+returning email, role, claim_code;
+```
+
+That gives you `/teacher`, `/site`, `/today`, and a pure curriculum-author view
+of `/org/curriculum`. Each is set up the same way: **Set up my account**, the
+address, its code, and a password you choose.
+
+A note on the student account: it is enrolled in nothing, so `/today` will show
 empty states rather than a pathway. That is the known gap in §8, not a fault in
 the account.
 
-The organization is named `Beyond.Ed` and there is one school, `Main Campus`.
-To change them:
+The organization is named `Beyond.Ed` and there is one school, `Main Campus`,
+because I did not know your district's real names. To change them:
 
 ```sql
 update public.organizations set name = 'Your District Name';
 update public.sites set name = 'Your School Name', short_name = 'YHS';
 ```
-
-### Giving somebody else more than one role
-
-On the invitation, when you provision them:
-
-```sql
-insert into public.account_invitations (
-  org_id, site_id, email, role, additional_roles,
-  first_name, last_name, grade_level, invited_by_user_id
-) values (
-  (select id from public.organizations limit 1),
-  (select id from public.sites limit 1),
-  'someone@example.com',
-  'teacher',                                                   -- primary
-  array['site_admin']::public.user_role[],                     -- also granted
-  'First', 'Last', null,
-  (select id from public.users where role = 'org_admin' limit 1)
-)
-returning email, claim_code;
-```
-
-Or afterwards, to an account that already exists:
-
-```sql
-insert into public.user_role_grants (user_id, role, granted_by_user_id, reason)
-values (
-  (select id from public.users where first_name = 'First' and last_name = 'Last'),
-  'site_admin',
-  (select id from public.users where role = 'org_admin' limit 1),
-  'Covering the site administrator role this term.'
-);
-```
-
-Two rules the constraints enforce: a site is required if the role set includes
-student, teacher, or site administrator; a grade is required if it includes
-student, and forbidden otherwise.
 
 ### If you ever need to bootstrap another administrator by hand
 

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { signOut } from "@/lib/actions/session";
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
 import { tenantFor } from "@/lib/auth/tenant";
+
+import { RoleSwitcher } from "./role-switcher";
 import type { User } from "@/lib/db/types";
 
 import { FOCUS_RING } from "./tokens";
@@ -52,16 +54,22 @@ export async function AppShell({
               </>
             ) : null}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <p className="text-sm text-white/85">
               {user.firstName} {user.lastName}
               <span aria-hidden="true"> · </span>
               <span className="text-white/70">
                 {role.label}
-                {user.gradeLevel ? `, grade ${user.gradeLevel}` : ""}
+                {user.gradeLevel && user.role === "student"
+                  ? `, grade ${user.gradeLevel}`
+                  : ""}
                 {siteShortName ? ` · ${siteShortName}` : ""}
               </span>
             </p>
+            <RoleSwitcher
+              heldRoles={user.heldRoles ?? [user.role]}
+              active={user.role}
+            />
             <form action={signOut}>
               <button
                 type="submit"
