@@ -27,14 +27,27 @@ pnpm install
 pnpm dev
 ```
 
-Open <http://localhost:3000> and choose a portal. There is no password, because
-there is no authentication in this build — see
-[ADR 0003](docs/decisions/0003-demo-identity-not-authentication.md). Each portal
-opens as the demo person whose record demonstrates that role; every other seeded
-person is behind the disclosure at the bottom of the entry screen.
+Open <http://localhost:3000>.
 
-**The store is in memory and resets when the dev server restarts.** "Rebuild
-demo data" on the landing page resets it without a restart.
+**Which of the two modes you get depends on whether Supabase is configured**
+(`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`):
+
+- **Configured** — the real one, and the only one a deployment runs. There is
+  no way to register: a district administrator provisions each account in
+  advance and hands over a short setup code, which the person uses once to
+  choose their own password. The database refuses any sign-up whose address was
+  never invited, and any whose code does not match
+  ([ADR 0014](docs/decisions/0014-district-provisioned-accounts.md)).
+  See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for the dashboard steps.
+- **Not configured** — the labelled demo picker, for reviewing the five role
+  workspaces on a laptop with no database
+  ([ADR 0003](docs/decisions/0003-demo-identity-not-authentication.md)). Each
+  portal opens as the demo person whose record demonstrates that role; every
+  other seeded person is behind the disclosure at the bottom. It cannot be
+  reached on a deployment that has a database — the actions behind it refuse.
+
+**In demo mode the store is in memory and resets when the dev server restarts.**
+"Rebuild demo data" on the landing page resets it without a restart.
 
 The seeded tenant is a fictional district — **Northfield Learning Network**,
 with **5 sites, 584 students, 37 teachers** across Northfield Central,
@@ -159,7 +172,9 @@ finished page with nothing hidden
 | Intervention lifecycle | `lib/intervention/` — guarded transitions, stored return destination |
 | Audit | `lib/audit/` — append-only, written in the same transaction as the action |
 | Server actions | `lib/actions/` — Zod-validated, idempotent, transactional, audited |
-| Database schema | `supabase/migrations/`, `supabase/policies/` — canonical, not yet applied |
+| Authentication | `lib/auth/`, `lib/supabase/` — server-resolved on every request |
+| Account provisioning | `lib/provisioning/`, `supabase/migrations/0012`–`0019` — invitation and setup code, enforced in the database |
+| Database schema | `supabase/migrations/`, `supabase/policies/` — canonical, and applied |
 
 ### The invariants, and where they are enforced
 
@@ -184,11 +199,14 @@ finished page with nothing hidden
 
 Stated plainly, because the interface states them too:
 
-- **No database.** The beta runs in memory ([ADR 0002](docs/decisions/0002-in-memory-store-for-the-beta.md)).
-  The schema and RLS policies are written and committed; applying them needs a
-  provisioned Supabase project and human approval.
-- **No authentication** ([ADR 0003](docs/decisions/0003-demo-identity-not-authentication.md)).
-  Do not deploy this build anywhere reachable.
+- **Student progress is not in Postgres yet.** Identity, accounts, invitations,
+  the audit trail, and file storage are live against Supabase. Lesson progress,
+  quiz attempts, grades, mastery, and interventions still run on the in-memory
+  store ([ADR 0002](docs/decisions/0002-in-memory-store-for-the-beta.md)) — the
+  tables and RLS policies exist and are applied, but the domain modules above
+  them have not been ported. A signed-in student therefore sees empty states
+  rather than a pathway. This is the next piece of work, and it is why the demo
+  mode still exists.
 - **Playwright end-to-end tests are not set up.** Vitest covers the domain and
   the flows; browser-level coverage is the next testing step.
 - **Lesson content is written per lesson, and 5,124 of the 5,130 are unwritten.**
@@ -205,11 +223,14 @@ Stated plainly, because the interface states them too:
   studio takes the https address of a video plus a required transcript, and of a
   material — a reading, worksheet, deck, data set, or reference sheet — plus a
   required statement of what the student does with it and how a student who
-  cannot open that format gets the same content. Uploading the file itself needs
-  Supabase Storage, which is not provisioned
-  ([ADR 0010](docs/decisions/0010-lesson-studio.md)).
+  cannot open that format gets the same content. Uploading the file itself is
+  not wired into the studio yet ([ADR 0010](docs/decisions/0010-lesson-studio.md)).
+  The private `student-uploads` bucket and its policies are applied — a student
+  writes only beneath their own user id, staff read by the same scope helper
+  that governs the student's records, and no role may update or delete an
+  object, because uploaded work is evidence.
 - **Not built, and not implied to be:** file upload and downloadable workbooks,
-  role-change controls, configurable return rules, producing an actual export
+  configurable return rules, producing an actual export
   file, section reassignment, SIS/LMS/SSO integration, a family portal, and
   native applications.
 - **Foreign language and physical education** are outside the workbook's
