@@ -46,3 +46,10 @@ alter table public.course_structure_foundations enable row level security;
 -- security_invoker, which is what makes `evidence_current` safe to read.
 alter view public.evidence_current       set (security_invoker = on);
 alter view public.grade_records_current  set (security_invoker = on);
+
+-- Added in migration 0012 — the district administrator's provisioning roster.
+alter table public.account_invitations enable row level security;
+
+-- `storage.objects` and `storage.buckets` arrive with RLS already enabled by
+-- the storage extension. Migration 0013 adds the `student-uploads` policies;
+-- there is nothing to enable here.
