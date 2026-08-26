@@ -30,5 +30,14 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // iCloud Drive syncs ~/Desktop and periodically leaves conflict copies
+    // beside generated files ("routes.d 2.ts"). They are duplicates of files
+    // TypeScript already compiles, so it reports every declaration in them
+    // as a redeclaration. Nothing in this project is named this way on
+    // purpose.
+    "**/* ?.ts",
+    "**/* ?.tsx"
+  ]
 }
