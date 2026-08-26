@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -314,25 +314,47 @@ describe("the browser client cannot write consequential state (CLAUDE.md §1)", 
   });
 });
 
-describe("demo identity cannot be reached on a real deployment (ADR 0003)", () => {
-  const session = readFileSync("lib/actions/session.ts", "utf8");
-
-  it("signInAs refuses when Supabase is configured", () => {
-    const at = session.indexOf("export async function signInAs");
-    expect(session.slice(at, at + 300)).toMatch(
-      /authMode\(\) === "supabase"[\s\S]{0,60}redirect/,
-    );
+describe("the demo identity mode is gone, not merely disabled", () => {
+  it("no seeded-identity action exists anywhere", () => {
+    // These were the whole demo surface: pick a seeded person, become them,
+    // rebuild the store. A disabled version of them would still be a second
+    // way to hold a session, so they are removed rather than guarded.
+    for (const file of APP_SOURCE) {
+      const source = readFileSync(file, "utf8");
+      expect(source, file).not.toMatch(/export async function signInAs\b/);
+      expect(source, file).not.toMatch(/export async function resetDemoData\b/);
+    }
   });
 
-  it("resetDemoData refuses when Supabase is configured", () => {
-    const at = session.indexOf("export async function resetDemoData");
-    expect(session.slice(at, at + 300)).toMatch(
-      /authMode\(\) === "supabase"[\s\S]{0,60}redirect/,
-    );
+  it("nothing sets or reads a demo session cookie", () => {
+    for (const file of APP_SOURCE) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(/beyond_ed_demo_user/);
+    }
   });
 
-  it("the demo cookie is httpOnly, so the browser cannot forge an identity", () => {
-    expect(session).toMatch(/httpOnly:\s*true/);
+  it("the portal picker and its data are deleted, not orphaned", () => {
+    expect(existsSync("lib/auth/portals.ts")).toBe(false);
+  });
+
+  it("identity comes only from a revalidated Supabase token", () => {
+    const session = readFileSync("lib/auth/session.ts", "utf8");
+    expect(session).toMatch(/supabase\.auth\.getUser\(\)/);
+
+    // The cookie jar IS still touched, to keep every identity-dependent page
+    // out of the static prerender — but nothing is read from it. What matters
+    // is that no cookie NAMES a person and no seeded record is consulted:
+    // those were the two ways the demo mode handed out a session.
+    expect(session).not.toMatch(/jar\.get\(/);
+    expect(session).not.toMatch(/cookies\(\)\)?\.get/);
+    expect(session).not.toMatch(/db\(\)/);
+    expect(session).not.toMatch(/ensureSeeded/);
+  });
+
+  it("an unconfigured deployment resolves to no session at all", () => {
+    // Not to a default user, and not to a fallback mode — there is no longer
+    // one to fall back to.
+    const session = readFileSync("lib/auth/session.ts", "utf8");
+    expect(session).toMatch(/if \(!isSupabaseConfigured\(\)\) return \{ kind: "unconfigured" \}/);
   });
 });
 

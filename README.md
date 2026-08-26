@@ -29,25 +29,23 @@ pnpm dev
 
 Open <http://localhost:3000>.
 
-**Which of the two modes you get depends on whether Supabase is configured**
-(`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`):
+**Both Supabase variables are required** (`NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). There is no demo mode: the seeded
+identity picker from ADR 0003 has been removed, along with the cookie it set and
+the actions that read it. Without the variables the app renders a plain "not
+configured" page, so a misconfigured deployment fails visibly rather than
+quietly looking like a working product.
 
-- **Configured** — the real one, and the only one a deployment runs. There is
-  no way to register: a district administrator provisions each account in
-  advance and hands over a short setup code, which the person uses once to
-  choose their own password. The database refuses any sign-up whose address was
-  never invited, and any whose code does not match
-  ([ADR 0014](docs/decisions/0014-district-provisioned-accounts.md)).
-  See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for the dashboard steps.
-- **Not configured** — the labelled demo picker, for reviewing the five role
-  workspaces on a laptop with no database
-  ([ADR 0003](docs/decisions/0003-demo-identity-not-authentication.md)). Each
-  portal opens as the demo person whose record demonstrates that role; every
-  other seeded person is behind the disclosure at the bottom. It cannot be
-  reached on a deployment that has a database — the actions behind it refuse.
+A district administrator provisions each account and hands over a short setup
+code; the person uses it once to choose their own password. The database refuses
+any sign-up whose address was never invited, and any whose code does not match
+([ADR 0014](docs/decisions/0014-district-provisioned-accounts.md)). See
+[SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 
-**In demo mode the store is in memory and resets when the dev server restarts.**
-"Rebuild demo data" on the landing page resets it without a restart.
+**Student progress still runs on the in-memory store** from ADR 0002, so a
+signed-in student sees empty states rather than a pathway, and the curriculum
+surfaces read seeded course versions. Porting that to Postgres is the next
+piece of work.
 
 The seeded tenant is a fictional district — **Northfield Learning Network**,
 with **5 sites, 584 students, 37 teachers** across Northfield Central,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
-import { authMode, requireUser } from "@/lib/auth/session";
-import { Banner, Card, PreviewAction, SectionHeading } from "@/lib/design/primitives";
+import { requireUser } from "@/lib/auth/session";
+import { Banner, SectionHeading } from "@/lib/design/primitives";
 import { AccountsPanel } from "@/lib/provisioning/accounts-panel";
 import { grantableRoles, loadDirectory } from "@/lib/provisioning/directory";
 
@@ -26,27 +26,6 @@ export const metadata: Metadata = {
  */
 export default async function SiteAccountsPage() {
   const actor = await requireUser();
-
-  if (authMode() !== "supabase") {
-    return (
-      <div className="py-6">
-        <header>
-          <h1 className="text-3xl font-bold tracking-tight text-ink">Accounts</h1>
-          <p className="mt-2 max-w-3xl text-base text-ink-muted">
-            Provision student and teacher accounts for this school.
-          </p>
-        </header>
-        <div className="mt-6">
-          <Card className="p-5">
-            <PreviewAction
-              label="Provision an account"
-              detail="Unavailable in the local demo build, which has no database and no authentication. Configure a Supabase project and this becomes the real account portal for this school."
-            />
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   const directory = await loadDirectory(actor);
 

@@ -1,19 +1,17 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
-import { authMode, DEMO_SESSION_COOKIE, sessionState } from "@/lib/auth/session";
-import { clearDatabase, db } from "@/lib/db/store";
-import { ensureSeeded } from "@/lib/db/seed";
+import { sessionState } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { callbackUrl } from "@/lib/supabase/site-url";
 import { failure, type ActionResult } from "./result";
 
 /**
- * Session actions for both modes (see `lib/auth/session.ts`).
+ * Session actions (see `lib/auth/session.ts`).
  *
  * Three ways in, and they are not equivalent:
  *
@@ -87,14 +85,6 @@ const Claim = z
 export async function claimAccountAction(
   formData: FormData,
 ): Promise<ActionResult> {
-  if (authMode() !== "supabase") {
-    return failure(
-      "Accounts are not available in the local demo build.",
-      "Nothing was changed.",
-      "Configure a Supabase project, or choose a demo portal instead.",
-    );
-  }
-
   const parsed = Claim.safeParse({
     email: formData.get("email"),
     claimCode: formData.get("claimCode"),
@@ -188,8 +178,6 @@ export async function claimAccountAction(
 const SignIn = z.object({ email: Email, password: z.string().min(1).max(200) });
 
 export async function signInAction(formData: FormData): Promise<ActionResult> {
-  if (authMode() !== "supabase") redirect("/?error=demo_disabled");
-
   const parsed = SignIn.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -252,8 +240,6 @@ export async function signInAction(formData: FormData): Promise<ActionResult> {
 export async function requestPasswordResetAction(
   formData: FormData,
 ): Promise<ActionResult> {
-  if (authMode() !== "supabase") redirect("/?error=demo_disabled");
-
   const parsed = Email.safeParse(formData.get("email"));
   if (!parsed.success) {
     return failure(
@@ -292,8 +278,6 @@ const NewPassword = z
 export async function setNewPasswordAction(
   formData: FormData,
 ): Promise<ActionResult> {
-  if (authMode() !== "supabase") redirect("/?error=demo_disabled");
-
   const parsed = NewPassword.safeParse({
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
@@ -338,59 +322,7 @@ export async function setNewPasswordAction(
 // ---------------------------------------------------------------------------
 
 export async function signOut() {
-  if (authMode() === "supabase") {
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-  } else {
-    const jar = await cookies();
-    jar.delete(DEMO_SESSION_COOKIE);
-  }
+  const supabase = await createClient();
+  await supabase.auth.signOut();
   redirect("/?signed_out=1");
-}
-
-// ---------------------------------------------------------------------------
-// Demo mode only (ADR 0003)
-// ---------------------------------------------------------------------------
-
-/**
- * Demo identity selection. NOT authentication.
- *
- * Refused outright when Supabase is configured, so a deployment that has a real
- * database cannot be talked into handing out a seeded identity by posting to
- * this action directly.
- */
-const DemoSignIn = z.object({ userId: z.string().min(1).max(64) });
-
-export async function signInAs(formData: FormData) {
-  if (authMode() === "supabase") redirect("/?error=demo_disabled");
-
-  ensureSeeded();
-  const parsed = DemoSignIn.safeParse({ userId: formData.get("userId") });
-  if (!parsed.success) redirect("/?error=invalid");
-
-  const user = db().users.find((u) => u.id === parsed.data.userId);
-  if (!user) redirect("/?error=unknown");
-
-  const jar = await cookies();
-  jar.set(DEMO_SESSION_COOKIE, user.id, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
-  redirect(ROLE_PRESENTATION[user.role].home);
-}
-
-/**
- * Rebuilds the seeded store from scratch. A demo-mode control, and labelled as
- * one: it is refused when a real database is configured, where "rebuild the
- * data" would mean something very different.
- */
-export async function resetDemoData() {
-  if (authMode() === "supabase") redirect("/?error=demo_disabled");
-
-  clearDatabase();
-  ensureSeeded();
-  const jar = await cookies();
-  jar.delete(DEMO_SESSION_COOKIE);
-  redirect("/?reset=1");
 }

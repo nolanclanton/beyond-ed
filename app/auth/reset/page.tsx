@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ResetForm } from "./reset-form";
-import { authMode, sessionState } from "@/lib/auth/session";
+import { sessionState } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Set a new password · Beyond.Ed",
@@ -19,8 +19,6 @@ export const metadata: Metadata = {
  * sign-in where the "forgotten my password" flow is.
  */
 export default async function ResetPasswordPage() {
-  if (authMode() !== "supabase") redirect("/");
-
   const state = await sessionState();
   if (state.kind !== "signed_in") redirect("/?error=denied");
 

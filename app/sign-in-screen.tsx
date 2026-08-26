@@ -260,23 +260,6 @@ function Notice({
     );
   }
 
-  if (notice.error === "demo_disabled") {
-    return (
-      <div
-        role="alert"
-        className="mt-6 rounded-2xl border border-primary-line bg-primary-surface px-5 py-4 text-sm"
-      >
-        <p className="font-semibold text-ink">
-          That control does not exist on this deployment.
-        </p>
-        <p className="mt-1 leading-relaxed text-ink-muted">
-          Demo identities and seeded data are local-development only. This
-          deployment has a real database, so sign in with your district account.
-        </p>
-      </div>
-    );
-  }
-
   if (notice.signedOut) {
     return (
       <div
