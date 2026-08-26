@@ -18,8 +18,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabaseEnv } from "./env";
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  // Local development without a Supabase project still runs, on the labelled
-  // demo identity picker (ADR 0003). Nothing to refresh in that mode.
+  // An unconfigured deployment has no session to refresh; the entry page says
+  // so plainly rather than pretending to have one.
   if (!isSupabaseConfigured()) return NextResponse.next({ request });
 
   let response = NextResponse.next({ request });

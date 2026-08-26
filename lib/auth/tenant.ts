@@ -6,14 +6,10 @@
  * request rather than written into a component. Pointing the product at a
  * different district changes data, not markup.
  *
- * Resolves from Postgres in Supabase mode and from the seeded store in demo
- * mode, so the shell does not have to know which one it is running in. Both
- * paths return nulls rather than throwing: a missing label makes the header
- * shorter, which is not worth failing a page render over.
+ * Returns nulls rather than throwing: a missing label makes the header shorter,
+ * which is not worth failing a page render over.
  */
 import type { User } from "@/lib/db/types";
-import { db } from "@/lib/db/store";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export type Tenant = {
   organizationName: string | null;
@@ -23,14 +19,6 @@ export type Tenant = {
 const EMPTY: Tenant = { organizationName: null, siteShortName: null };
 
 export async function tenantFor(user: User): Promise<Tenant> {
-  if (!isSupabaseConfigured()) {
-    const d = db();
-    return {
-      organizationName: d.organizations.find((o) => o.id === user.orgId)?.name ?? null,
-      siteShortName: d.sites.find((s) => s.id === user.siteId)?.shortName ?? null,
-    };
-  }
-
   try {
     const { createClient } = await import("@/lib/supabase/server");
     const supabase = await createClient();

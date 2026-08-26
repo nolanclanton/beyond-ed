@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { signOut } from "@/lib/actions/session";
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
-import { authMode } from "@/lib/auth/session";
 import { tenantFor } from "@/lib/auth/tenant";
 import type { User } from "@/lib/db/types";
 
@@ -13,12 +12,6 @@ export type NavItem = { label: string; href: string };
 
 /**
  * The application shell. One header, one navigation, one identity line.
- *
- * The demo banner is not decoration, and it is not unconditional either: it
- * appears only when this build really is running on a seeded in-memory store
- * with no authentication. On a deployment with a Supabase project the same
- * sentence would be a lie, and a banner that misdescribes the build is worse
- * than no banner (CLAUDE.md §12 — functional honesty).
  */
 export async function AppShell({
   user,
@@ -32,7 +25,6 @@ export async function AppShell({
   contextLine?: string;
 }) {
   const role = ROLE_PRESENTATION[user.role];
-  const isDemo = authMode() === "demo";
   // The organization is a tenant read from the record, never a literal in a
   // component. Pointing the product at a different district changes data, not
   // markup.
@@ -75,7 +67,7 @@ export async function AppShell({
                 type="submit"
                 className={`rounded-md border border-white/30 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/10 ${FOCUS_RING}`}
               >
-                {isDemo ? "Switch demo user" : "Sign out"}
+                Sign out
               </button>
             </form>
           </div>
@@ -101,14 +93,7 @@ export async function AppShell({
         </div>
       </div>
 
-      {isDemo ? (
-        <p className="mx-auto w-full max-w-6xl px-4 pt-3 text-xs text-ink-muted sm:px-6">
-          <strong className="font-semibold text-ink">Local demo build.</strong>{" "}
-          Demo identities, no authentication, and a seeded in-memory store that
-          resets when the server restarts. Every person and result is fictional.
-          {contextLine ? ` ${contextLine}` : ""}
-        </p>
-      ) : contextLine ? (
+      {contextLine ? (
         <p className="mx-auto w-full max-w-6xl px-4 pt-3 text-xs text-ink-muted sm:px-6">
           {contextLine}
         </p>

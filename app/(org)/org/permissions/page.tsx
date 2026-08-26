@@ -1,18 +1,8 @@
 import type { Metadata } from "next";
 
-import { authMode, requireUser } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
-import { visibleStudentIds } from "@/lib/auth/scope";
-import { db } from "@/lib/db/store";
-import {
-  Banner,
-  Card,
-  CardHeader,
-  PreviewAction,
-  ScrollX,
-  SectionHeading,
-  StatusChip,
-} from "@/lib/design/primitives";
+import { Banner, Card, SectionHeading } from "@/lib/design/primitives";
 import { AccountsPanel } from "@/lib/provisioning/accounts-panel";
 import { grantableRoles, loadDirectory } from "@/lib/provisioning/directory";
 
@@ -36,7 +26,7 @@ export const metadata: Metadata = {
  */
 export default async function PermissionsPage() {
   const actor = await requireUser();
-  const live = authMode() === "supabase";
+  const directory = await loadDirectory(actor);
 
   return (
     <div className="py-6">
@@ -59,17 +49,22 @@ export default async function PermissionsPage() {
         </Banner>
       </div>
 
-      {live ? (
-        <section aria-labelledby="accounts" className="mt-8">
-          <SectionHeading
-            id="accounts"
-            hint="Every action here writes an audit event with your name, the time, and your reason."
-          >
-            District accounts
-          </SectionHeading>
-          <LiveAccounts actorId={actor.id} />
-        </section>
-      ) : null}
+      <section aria-labelledby="accounts" className="mt-8">
+        <SectionHeading
+          id="accounts"
+          hint="Every action here writes an audit event with your name, the time, and your reason."
+        >
+          District accounts
+        </SectionHeading>
+        <AccountsPanel
+          invitations={directory.invitations}
+          people={directory.people}
+          sites={directory.sites}
+          grantableRoles={grantableRoles(actor)}
+          actorId={actor.id}
+          error={directory.error}
+        />
+      </section>
 
       <section aria-labelledby="roles" className="mt-10">
         <SectionHeading id="roles" hint="The closed role set.">
@@ -86,110 +81,6 @@ export default async function PermissionsPage() {
         </div>
       </section>
 
-      {live ? null : <DemoDirectory />}
     </div>
-  );
-}
-
-/** The real portal. Reads and writes Postgres under the caller's own policies. */
-async function LiveAccounts({ actorId }: { actorId: string }) {
-  const actor = await requireUser();
-  const directory = await loadDirectory(actor);
-
-  return (
-    <AccountsPanel
-      invitations={directory.invitations}
-      people={directory.people}
-      sites={directory.sites}
-      grantableRoles={grantableRoles(actor)}
-      actorId={actorId}
-      error={directory.error}
-    />
-  );
-}
-
-/**
- * Demo mode only. The seeded roster, read from the in-memory store.
- *
- * The scope column is not a description — it is computed by calling the same
- * `visibleStudentIds` the application uses on every read, so what is shown here
- * is what the person actually sees.
- */
-function DemoDirectory() {
-  const d = db();
-  const people = [...d.users].sort(
-    (a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName),
-  );
-
-  return (
-    <>
-      <section aria-labelledby="people" className="mt-10">
-        <SectionHeading
-          id="people"
-          hint="The student count is computed with the same scope resolver the application uses."
-        >
-          People
-        </SectionHeading>
-        <Card>
-          <CardHeader title="Role assignments" hint={`${people.length} seeded users`} />
-          <ScrollX>
-            <table className="w-full min-w-[46rem] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-line text-left">
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Person</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Role</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Site</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Curriculum author</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-ink">Students in scope</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {people.map((u) => {
-                  const site = d.sites.find((s) => s.id === u.siteId);
-                  return (
-                    <tr key={u.id}>
-                      <th scope="row" className="px-5 py-2.5 text-left font-medium text-ink">
-                        {u.firstName} {u.lastName}
-                      </th>
-                      <td className="px-5 py-2.5 text-xs text-ink-muted">
-                        {ROLE_PRESENTATION[u.role].label}
-                      </td>
-                      <td className="px-5 py-2.5 text-xs text-ink-muted">
-                        {site?.shortName ?? "Organization"}
-                      </td>
-                      <td className="px-5 py-2.5">
-                        {u.curriculumAuthor ? (
-                          <StatusChip label="Authorized" tone="info" />
-                        ) : (
-                          <span className="text-xs text-ink-muted">No</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-2.5 text-ink-muted">
-                        {visibleStudentIds(u).length}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </ScrollX>
-        </Card>
-      </section>
-
-      <section aria-labelledby="changes" className="mt-10">
-        <SectionHeading
-          id="changes"
-          hint="Provisioning is live only when a Supabase project is configured."
-        >
-          Provisioning accounts
-        </SectionHeading>
-        <Card className="p-5">
-          <PreviewAction
-            label="Provision an account"
-            detail="Unavailable in the local demo build, which has no database and no authentication. Configure a Supabase project and this becomes the real account portal: provision an account and hand over its setup code, revoke a pending one, or withdraw access from someone who has already signed in."
-          />
-        </Card>
-      </section>
-    </>
   );
 }

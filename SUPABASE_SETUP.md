@@ -142,12 +142,11 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 Then `pnpm dev` and open <http://localhost:3000>.
 
-> **The two modes.** With these variables **absent**, the app runs the seeded
-> in-memory demo with the labelled identity picker (ADR 0003), which is how the
-> five role workspaces stay reviewable without a database. With them
-> **present**, that picker does not exist and district accounts are the only way
-> in. There is no way to reach a demo identity on a deployment that has a
-> database — the actions behind it refuse.
+> **These are required.** The demo identity picker has been removed, so there is
+> no seeded mode to fall back to. Without both variables the site renders a
+> plain "not configured" page and nothing else — deliberately, so a
+> misconfigured deployment fails visibly instead of quietly looking like a
+> working product.
 
 ### Vercel
 
@@ -209,25 +208,67 @@ supabase gen types typescript --linked > lib/database.types.ts
 
 ---
 
-## 4. Your account — already created
+## 4. Your accounts — already created
 
-The bootstrap is done. There is a pending invitation waiting for you:
+Beyond.Ed gives each person exactly one role: `users.role` is a single column,
+and one address may hold only one account. To reach all five workspaces you
+need five accounts, so they are set up on **Gmail plus-addresses**, which all
+deliver to your normal `nolan20823@gmail.com` inbox.
 
-| | |
-|---|---|
-| Email | `nolan20823@gmail.com` |
-| Role | Organization administrator |
-| Organization | `Beyond.Ed` |
-| **Setup code** | **`XAWK BSUF`** (enter it as `XAWKBSUF` — spacing and case do not matter) |
+**Waiting for you now:**
 
-Once §1 and §2 are done, open the site, choose **Set up my account**, and enter
-that address, that code, and a password of your choosing. You land on `/org`
-with access to every organization surface — including **Accounts**, where you
-add everybody else.
+| Address | Workspace | Setup code |
+|---|---|---|
+| `nolan20823@gmail.com` | Organization admin **+ curriculum author** → `/org` | **`PUD9 H6D6`** |
+
+That first account covers two of the five things you asked for: curriculum
+authoring is a separate *authorization*, not a rank (CLAUDE.md §3), so an
+organization administrator who holds it reaches every curriculum surface
+without needing a second login.
+
+### The other four
+
+They cannot be created until the first one exists, and that is the invitation
+gate doing its job: every invitation records who issued it, and until you claim
+your account there is nobody to record. So claim the account above first, then
+either:
+
+**Use the portal** (preferred — scope-checked, and each one writes an audit
+event with your name and reason): Organization → **Accounts**.
+
+**Or paste this once** into the Supabase SQL editor. It resolves the inviter
+itself, and `returning` hands you the four setup codes:
+
+```sql
+insert into public.account_invitations (
+  org_id, site_id, email, role, first_name, last_name, grade_level,
+  invited_by_user_id
+)
+select
+  (select id from public.organizations limit 1),
+  case when v.role in ('org_admin','curriculum_author') then null
+       else (select id from public.sites limit 1) end,
+  v.email, v.role::public.user_role, v.first_name, v.last_name, v.grade,
+  (select id from public.users where role = 'org_admin' limit 1)
+from (values
+  ('nolan20823+teacher@gmail.com',    'teacher',           'Nolan', 'Clanton (Teacher)',    null::smallint),
+  ('nolan20823+siteadmin@gmail.com',  'site_admin',        'Nolan', 'Clanton (Site admin)', null::smallint),
+  ('nolan20823+student@gmail.com',    'student',           'Nolan', 'Clanton (Student)',    9::smallint),
+  ('nolan20823+curriculum@gmail.com', 'curriculum_author', 'Nolan', 'Clanton (Curriculum)', null::smallint)
+) as v(email, role, first_name, last_name, grade)
+returning email, role, claim_code;
+```
+
+That gives you `/teacher`, `/site`, `/today`, and a pure curriculum-author view
+of `/org/curriculum`. Each is set up the same way: **Set up my account**, the
+address, its code, and a password you choose.
+
+A note on the student account: it is enrolled in nothing, so `/today` will show
+empty states rather than a pathway. That is the known gap in §8, not a fault in
+the account.
 
 The organization is named `Beyond.Ed` and there is one school, `Main Campus`,
-because I did not know your district's real names. To change them, in the
-Supabase **SQL Editor**:
+because I did not know your district's real names. To change them:
 
 ```sql
 update public.organizations set name = 'Your District Name';
@@ -254,8 +295,6 @@ insert into public.account_invitations (
 )
 returning email, claim_code;
 ```
-
-The `returning` clause gives you the setup code to hand over.
 
 ---
 
@@ -307,7 +346,8 @@ portal. Prefer the portal for anything but an initial roster load.
 In order. Each step depends on the one before.
 
 1. **Signed out.** Open the site. You should see two tabs — *Sign in* and *Set
-   up my account* — and no "create an account" link anywhere.
+   up my account* — no "create an account" link anywhere, and no demo portal
+   picker (it has been removed entirely).
 2. **An unprovisioned address is refused.** Under *Set up my account*, try an
    address you have not added, with any code. It should fail with a message that
    does **not** reveal whether the address exists. Confirm no row was added to
@@ -353,9 +393,9 @@ In order. Each step depends on the one before.
   Lesson progress, quiz attempts, grades, mastery, and interventions still run
   on the in-memory store from ADR 0002 — the tables and policies exist and are
   applied, but the ~33,000 lines of domain code above them have not been ported
-  yet. A signed-in student therefore sees empty states rather than a pathway.
-  This is the next piece of work, and it is the reason the demo mode still
-  exists.
+  yet. A signed-in student therefore sees empty states rather than a pathway,
+  and the curriculum surfaces still read seeded course versions from that store.
+  This is the next piece of work.
 - **Configure SMTP before real students use password reset.** See §1b.
 - **The scope helpers still sit in the `public` schema**, so a *signed-in* caller
   can reach them at `/rest/v1/rpc/...`. They answer only about the caller's own
