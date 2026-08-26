@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# supabase cli — local scratch state, regenerated on every run
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
