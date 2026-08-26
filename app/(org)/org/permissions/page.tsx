@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { requireUser } from "@/lib/auth/session";
+import { authMode, requireUser } from "@/lib/auth/session";
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
 import { visibleStudentIds } from "@/lib/auth/scope";
 import { db } from "@/lib/db/store";
@@ -13,33 +13,40 @@ import {
   SectionHeading,
   StatusChip,
 } from "@/lib/design/primitives";
+import { AccountsPanel } from "@/lib/provisioning/accounts-panel";
+import { grantableRoles, loadDirectory } from "@/lib/provisioning/directory";
 
 export const metadata: Metadata = {
-  title: "Permissions · Beyond.Ed",
-  description: "Roles, scope, and what each person can actually see.",
+  title: "Accounts and permissions · Beyond.Ed",
+  description:
+    "Provision district accounts, and see the roles and scope each person holds.",
 };
 
 /**
- * Permissions (blueprint §6, CLAUDE.md §3).
+ * Accounts and permissions (blueprint §6, CLAUDE.md §3).
  *
- * The scope column is not a description — it is computed by calling the same
- * `visibleStudentIds` the application uses on every read, so what is shown here
- * is what the person actually sees.
+ * Two things live here because they are the same question asked twice: who has
+ * an account, and what does that account let them see.
+ *
+ * The provisioning panel is the district's ONLY route to a new account. Signing
+ * up does not create one — the database refuses any address an
+ * administrator has not already invited, and any setup code that
+ * does not match (migrations 0012 and 0019) — so this page is
+ * where a person's access begins and ends.
  */
 export default async function PermissionsPage() {
   const actor = await requireUser();
-  const d = db();
-  const people = [...d.users].sort(
-    (a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName),
-  );
+  const live = authMode() === "supabase";
 
   return (
     <div className="py-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight text-ink">Permissions</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-ink">
+          Accounts and permissions
+        </h1>
         <p className="mt-2 max-w-3xl text-base text-ink-muted">
-          {people.length} people. Scope is enforced on every read and write, not
-          only in the interface.
+          Accounts are created here, one address at a time. Scope is
+          enforced on every read and write, not only in the interface.
         </p>
       </header>
 
@@ -52,7 +59,19 @@ export default async function PermissionsPage() {
         </Banner>
       </div>
 
-      <section aria-labelledby="roles" className="mt-8">
+      {live ? (
+        <section aria-labelledby="accounts" className="mt-8">
+          <SectionHeading
+            id="accounts"
+            hint="Every action here writes an audit event with your name, the time, and your reason."
+          >
+            District accounts
+          </SectionHeading>
+          <LiveAccounts actorId={actor.id} />
+        </section>
+      ) : null}
+
+      <section aria-labelledby="roles" className="mt-10">
         <SectionHeading id="roles" hint="The closed role set.">
           Roles
         </SectionHeading>
@@ -67,6 +86,43 @@ export default async function PermissionsPage() {
         </div>
       </section>
 
+      {live ? null : <DemoDirectory />}
+    </div>
+  );
+}
+
+/** The real portal. Reads and writes Postgres under the caller's own policies. */
+async function LiveAccounts({ actorId }: { actorId: string }) {
+  const actor = await requireUser();
+  const directory = await loadDirectory(actor);
+
+  return (
+    <AccountsPanel
+      invitations={directory.invitations}
+      people={directory.people}
+      sites={directory.sites}
+      grantableRoles={grantableRoles(actor)}
+      actorId={actorId}
+      error={directory.error}
+    />
+  );
+}
+
+/**
+ * Demo mode only. The seeded roster, read from the in-memory store.
+ *
+ * The scope column is not a description — it is computed by calling the same
+ * `visibleStudentIds` the application uses on every read, so what is shown here
+ * is what the person actually sees.
+ */
+function DemoDirectory() {
+  const d = db();
+  const people = [...d.users].sort(
+    (a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName),
+  );
+
+  return (
+    <>
       <section aria-labelledby="people" className="mt-10">
         <SectionHeading
           id="people"
@@ -75,7 +131,7 @@ export default async function PermissionsPage() {
           People
         </SectionHeading>
         <Card>
-          <CardHeader title="Role assignments" hint={`${people.length} users`} />
+          <CardHeader title="Role assignments" hint={`${people.length} seeded users`} />
           <ScrollX>
             <table className="w-full min-w-[46rem] border-collapse text-sm">
               <thead>
@@ -123,20 +179,17 @@ export default async function PermissionsPage() {
       <section aria-labelledby="changes" className="mt-10">
         <SectionHeading
           id="changes"
-          hint="Role changes are audited with actor, target, before, after, and reason."
+          hint="Provisioning is live only when a Supabase project is configured."
         >
-          Changing a role
+          Provisioning accounts
         </SectionHeading>
         <Card className="p-5">
           <PreviewAction
-            label="Change a role"
-            detail="Not built. Role changes need a confirmation step, an audit event, and a re-check of every scope the person currently holds. Until that is real, this control does nothing rather than appearing to work."
+            label="Provision an account"
+            detail="Unavailable in the local demo build, which has no database and no authentication. Configure a Supabase project and this becomes the real account portal: provision an account and hand over its setup code, revoke a pending one, or withdraw access from someone who has already signed in."
           />
-          <p className="mt-4 text-sm text-ink-muted">
-            You are signed in as {actor.firstName} {actor.lastName}.
-          </p>
         </Card>
       </section>
-    </div>
+    </>
   );
 }

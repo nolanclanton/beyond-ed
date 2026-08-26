@@ -2,9 +2,12 @@ import type { CSSProperties } from "react";
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
+import { SignInScreen } from "@/app/sign-in-screen";
 import { resetDemoData, signInAs } from "@/lib/actions/session";
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
+import { authMode, sessionState } from "@/lib/auth/session";
 import { PORTALS } from "@/lib/auth/portals";
 import { COURSES } from "@/lib/curriculum/catalog";
 import { ensureSeeded } from "@/lib/db/seed";
@@ -20,7 +23,42 @@ export const metadata: Metadata = {
 };
 
 /**
- * The entry screen.
+ * The entry screen, in whichever of the two modes this build is running.
+ *
+ * With a Supabase project configured — which is every deployment — this is the
+ * district sign-in page and nothing else. Without one, it is the labelled demo
+ * portal picker below, which exists so the five role workspaces stay reviewable
+ * on a laptop with no database (ADR 0003).
+ *
+ * The branch happens before any seeded data is touched, so a real deployment
+ * never builds the demo store at all.
+ */
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string; error?: string; signed_out?: string }>;
+}) {
+  const params = await searchParams;
+
+  if (authMode() === "supabase") {
+    const state = await sessionState();
+    // Someone already signed in has a workspace, and this page is not it.
+    if (state.kind === "signed_in") {
+      redirect(ROLE_PRESENTATION[state.user.role].home);
+    }
+    return (
+      <SignInScreen
+        state={state}
+        notice={{ error: params.error, signedOut: params.signed_out === "1" }}
+      />
+    );
+  }
+
+  return <DemoPortalScreen params={params} />;
+}
+
+/**
+ * The demo portal picker. Local development only.
  *
  * A PORTAL picker, not a roster. Five choices, each opening as the demo person
  * whose record demonstrates that role. Everyone else stays reachable from the
@@ -34,16 +72,17 @@ export const metadata: Metadata = {
  * product's own surfaces because they are the same surfaces.
  *
  * This is not authentication. There is no password field because there are no
- * accounts (ADR 0003). Choosing a portal sets a cookie holding a seeded user
- * id, which the server reads and scope-checks on every request.
+ * accounts here (ADR 0003). Choosing a portal sets a cookie holding a seeded
+ * user id, which the server reads and scope-checks on every request. It is
+ * unreachable in production: `signInAs` refuses to run when Supabase is
+ * configured, and this component is never rendered there.
  */
-export default async function LandingPage({
-  searchParams,
+async function DemoPortalScreen({
+  params,
 }: {
-  searchParams: Promise<{ reset?: string; error?: string }>;
+  params: { reset?: string; error?: string };
 }) {
   ensureSeeded();
-  const params = await searchParams;
   const d = db();
 
   const isGenerated = (id: string) => id.startsWith("u_s_") || id.startsWith("u_t_");

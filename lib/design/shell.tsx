@@ -3,8 +3,9 @@ import Link from "next/link";
 
 import { signOut } from "@/lib/actions/session";
 import { ROLE_PRESENTATION } from "@/lib/auth/roles";
+import { authMode } from "@/lib/auth/session";
+import { tenantFor } from "@/lib/auth/tenant";
 import type { User } from "@/lib/db/types";
-import { db } from "@/lib/db/store";
 
 import { FOCUS_RING } from "./tokens";
 
@@ -13,11 +14,13 @@ export type NavItem = { label: string; href: string };
 /**
  * The application shell. One header, one navigation, one identity line.
  *
- * The beta banner is not decoration: this build runs on a seeded in-memory
- * store with demo identities and no real authentication, and every page says so
- * once, in words (CLAUDE.md §12 — functional honesty).
+ * The demo banner is not decoration, and it is not unconditional either: it
+ * appears only when this build really is running on a seeded in-memory store
+ * with no authentication. On a deployment with a Supabase project the same
+ * sentence would be a lie, and a banner that misdescribes the build is worse
+ * than no banner (CLAUDE.md §12 — functional honesty).
  */
-export function AppShell({
+export async function AppShell({
   user,
   nav,
   children,
@@ -28,13 +31,12 @@ export function AppShell({
   children: ReactNode;
   contextLine?: string;
 }) {
-  const d = db();
-  const site = d.sites.find((s) => s.id === user.siteId);
   const role = ROLE_PRESENTATION[user.role];
+  const isDemo = authMode() === "demo";
   // The organization is a tenant read from the record, never a literal in a
   // component. Pointing the product at a different district changes data, not
   // markup.
-  const organization = d.organizations.find((o) => o.id === user.orgId);
+  const { organizationName, siteShortName } = await tenantFor(user);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -51,10 +53,10 @@ export function AppShell({
             <Link href={role.home} className={`text-base font-semibold tracking-tight ${FOCUS_RING}`}>
               Beyond<span className="text-white/70">.Ed</span>
             </Link>
-            {organization ? (
+            {organizationName ? (
               <>
                 <span aria-hidden="true" className="text-white/40">/</span>
-                <span className="text-sm text-white/80">{organization.name}</span>
+                <span className="text-sm text-white/80">{organizationName}</span>
               </>
             ) : null}
           </div>
@@ -65,7 +67,7 @@ export function AppShell({
               <span className="text-white/70">
                 {role.label}
                 {user.gradeLevel ? `, grade ${user.gradeLevel}` : ""}
-                {site ? ` · ${site.shortName}` : ""}
+                {siteShortName ? ` · ${siteShortName}` : ""}
               </span>
             </p>
             <form action={signOut}>
@@ -73,7 +75,7 @@ export function AppShell({
                 type="submit"
                 className={`rounded-md border border-white/30 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/10 ${FOCUS_RING}`}
               >
-                Switch demo user
+                {isDemo ? "Switch demo user" : "Sign out"}
               </button>
             </form>
           </div>
@@ -99,12 +101,18 @@ export function AppShell({
         </div>
       </div>
 
-      <p className="mx-auto w-full max-w-6xl px-4 pt-3 text-xs text-ink-muted sm:px-6">
-        <strong className="font-semibold text-ink">Beta build.</strong> Demo
-        identities, no authentication, and a seeded in-memory store that resets
-        when the server restarts. Every person and result is fictional.
-        {contextLine ? ` ${contextLine}` : ""}
-      </p>
+      {isDemo ? (
+        <p className="mx-auto w-full max-w-6xl px-4 pt-3 text-xs text-ink-muted sm:px-6">
+          <strong className="font-semibold text-ink">Local demo build.</strong>{" "}
+          Demo identities, no authentication, and a seeded in-memory store that
+          resets when the server restarts. Every person and result is fictional.
+          {contextLine ? ` ${contextLine}` : ""}
+        </p>
+      ) : contextLine ? (
+        <p className="mx-auto w-full max-w-6xl px-4 pt-3 text-xs text-ink-muted sm:px-6">
+          {contextLine}
+        </p>
+      ) : null}
 
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 sm:px-6">
         {children}
@@ -143,6 +151,7 @@ export const TEACHER_NAV: NavItem[] = [
 export const SITE_NAV: NavItem[] = [
   { label: "Site overview", href: "/site" },
   { label: "Students", href: "/site/students" },
+  { label: "Accounts", href: "/site/accounts" },
   { label: "Teacher assignments", href: "/site/assignments" },
   { label: "Unresolved queue", href: "/site/queue" },
 ];
@@ -154,6 +163,6 @@ export const ORG_NAV: NavItem[] = [
   { label: "Lesson studio", href: "/org/curriculum/build" },
   { label: "Versions", href: "/org/curriculum" },
   { label: "Intervention system", href: "/org/intervention" },
-  { label: "Permissions", href: "/org/permissions" },
+  { label: "Accounts", href: "/org/permissions" },
   { label: "Audit", href: "/org/audit" },
 ];
