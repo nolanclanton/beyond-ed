@@ -112,6 +112,38 @@ An effective course carries the same stable `id` as the workbook's, so the old
 id-keyed cache would have handed a re-sequenced course the baseline order and
 never said so. The cache is a `WeakMap` keyed on the object.
 
+## The schema
+
+The in-memory store (ADR 0002) is what the product reads today, and the Postgres
+schema is maintained alongside it so the two describe the same thing. Four
+migrations carry this decision:
+
+| Migration | What it adds |
+|---|---|
+| `0009_lesson_materials.sql` | `lesson_material_kind`, `lesson_materials`, the draft-only trigger, RLS; adds `'material'` to `lesson_block_kind` |
+| `0010_material_blocks.sql` | `lesson_blocks.material_id`, the reworked shape constraint, the same-lesson trigger, and delete guards for placed materials AND placed videos |
+| `0011_course_structures.sql` | `course_structures`, `course_structure_units`, `course_structure_foundations`, `structure_is_editable`, `reject_non_draft_structure`, RLS |
+
+Three notes on the SQL, because each encodes a decision rather than a mechanism.
+
+**Three tables, not one jsonb column.** The same reasoning migration 0007 gives
+for the lesson canvas: the studio edits one thing at a time — move a unit,
+reorder a unit's lessons, re-frame a unit, weight one link, retire one link.
+Each is a row operation with its own audit event and its own draft check.
+
+**`lesson_codes` is not a foreign key.** Lesson codes come from the workbook,
+which the database does not hold — the catalog is generated into the
+application. The check that a version's sequence still names the lesson set the
+current workbook has is `structureIntegrity()`, which reports a divergence and
+blocks publication rather than repairing it silently.
+
+**The shape constraint in 0007 had no `ELSE`.** A `case` over an unhandled enum
+label evaluates to NULL, and a CHECK that evaluates to NULL passes — so any
+block kind added after 0007 would have been accepted with no shape requirement
+at all. 0010 adds `else false`. It also compares `kind::text` rather than the
+enum label, so the file is correct whether or not a migration runner applies
+0009 and 0010 in the same transaction.
+
 ## Consequences
 
 - A curriculum author can adapt a course without touching the workbook, and every
@@ -126,3 +158,8 @@ never said so. The cache is a `WeakMap` keyed on the object.
 - A structure override written against an older catalog can diverge from a
   regenerated workbook. `structureIntegrity` reports it and blocks publication
   rather than silently dropping or inventing a lesson.
+- The migrations and policies are written and reviewed but have NOT been
+  executed: neither the Supabase CLI nor Docker is available on the development
+  machine, and applying them to the hosted project needs human approval
+  (CLAUDE.md §2). They are canonical, not yet applied — the same status the rest
+  of `supabase/` has carried since ADR 0002.

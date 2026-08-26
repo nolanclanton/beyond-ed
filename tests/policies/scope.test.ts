@@ -29,12 +29,16 @@ import {
 import {
   addFoundation,
   foundationsFor,
+  governedFoundations,
   setFoundationImportance,
+  setFoundationRetired,
 } from "@/lib/curriculum/foundations";
 import { prerequisitesFor } from "@/lib/curriculum/prerequisites";
 import {
   effectiveCourse,
   moveUnit,
+  setUnitFraming,
+  structureChanges,
   structureFor,
   structureGate,
   versionRecord,
@@ -498,5 +502,167 @@ describe("curriculum governance is an authorization, not a hierarchy level", () 
       ),
     ).toThrow();
     expect(authoredLesson(DRAFT, LESSON)).toBeUndefined();
+  });
+
+  it("POSITIVE: an author re-frames a unit for this version only", () => {
+    const unit = effectiveCourse(versionRecord(DRAFT)).units[0];
+    setUnitFraming(
+      user("u_haddad"),
+      {
+        versionId: DRAFT,
+        unitId: unit.id,
+        title: "Ratios in the world we buy in",
+        essentialQuestion: "Where do ratios already decide something for us?",
+        reason: "Adapted for the pilot cohort.",
+      },
+      "pol-gov-7",
+    );
+    expect(effectiveCourse(versionRecord(DRAFT)).units[0].title).toBe(
+      "Ratios in the world we buy in",
+    );
+    // The workbook, and therefore every other version, is untouched.
+    expect(effectiveCourse(versionRecord(PUBLISHED)).units[0].title).toBe(unit.title);
+  });
+
+  it("NEGATIVE: an org admin without the authorization re-frames nothing", () => {
+    const unit = effectiveCourse(versionRecord(DRAFT)).units[0];
+    expect(() =>
+      setUnitFraming(
+        user("u_okonjo"),
+        {
+          versionId: DRAFT,
+          unitId: unit.id,
+          title: "Something else entirely",
+          essentialQuestion: "Should this have been allowed?",
+          reason: "No.",
+        },
+        "pol-gov-8",
+      ),
+    ).toThrow();
+    expect(structureFor(DRAFT)).toBeUndefined();
+  });
+
+  it("NEGATIVE: an org admin without the authorization retires no foundation", () => {
+    expect(() =>
+      setFoundationRetired(
+        user("u_okonjo"),
+        {
+          versionId: DRAFT,
+          lessonCode: GOVERNED_LESSON,
+          targetId: firstFoundation(),
+          retired: true,
+          reason: "No.",
+        },
+        "pol-gov-9",
+      ),
+    ).toThrow();
+    expect(
+      governedFoundations(DRAFT, GOVERNED_LESSON).find(
+        (f) => f.targetId === firstFoundation(),
+      )?.retired,
+    ).toBe(false);
+  });
+
+  it("POSITIVE: everyone in the organization READS the structure an author set", () => {
+    const unit = effectiveCourse(versionRecord(DRAFT)).units[1];
+    moveUnit(
+      user("u_haddad"),
+      { versionId: DRAFT, unitId: unit.id, direction: "up", reason: "Pilot order." },
+      "pol-gov-10",
+    );
+    setFoundationImportance(
+      user("u_haddad"),
+      {
+        versionId: DRAFT,
+        lessonCode: GOVERNED_LESSON,
+        targetId: firstFoundation(),
+        importance: 4,
+        note: "",
+        reason: "Evidence from the pilot.",
+      },
+      "pol-gov-11",
+    );
+
+    // Reading is not gated on the authorization. The sequence is the order a
+    // student's own course runs in, and a teacher plans against the same
+    // answer — so an org admin who cannot WRITE any of it still sees all of it.
+    expect(canAuthorCurriculum(user("u_okonjo"))).toBe(false);
+    expect(effectiveCourse(versionRecord(DRAFT)).units[0].id).toBe(unit.id);
+    expect(structureChanges(versionRecord(DRAFT))).not.toHaveLength(0);
+    expect(
+      foundationsFor(DRAFT, GOVERNED_LESSON).find((f) => f.targetId === firstFoundation())
+        ?.importance,
+    ).toBe(4);
+  });
+});
+
+/**
+ * Materials follow the rest of a lesson's content: written only by a curriculum
+ * author into a draft, read by everyone in the organization once published
+ * (supabase/policies/lesson_materials.sql).
+ */
+describe("lesson materials: author authorization and the draft rule", () => {
+  const DRAFT = "cv_Mathematics_6_2026_2";
+  const PUBLISHED = "cv_Mathematics_6_2026_1";
+  const LESSON = "MATH-06-L035";
+
+  /** Enough script for `resolveLessonContent` to treat the lesson as authored. */
+  const script = (versionId: string) => ({
+    versionId,
+    lessonCode: LESSON,
+    relevance: "",
+    goal: "Find and use a unit rate.",
+    successCriteria: [],
+    vocabulary: [],
+    workedModel: [],
+    guidedPractice: [],
+    independentTask: "",
+    notesOutline: [],
+    reason: "Policy test.",
+  });
+
+  function material(versionId: string) {
+    return {
+      versionId,
+      lessonCode: LESSON,
+      kind: "worksheet" as const,
+      title: "Unit-price comparison sheet",
+      url: "https://materials.example.org/unit-price.pdf",
+      purpose: "Fill in the price per ounce, then decide which is the better buy.",
+      accessNote: "Tagged PDF; a large-print copy is in the classroom folder.",
+      minutes: 10,
+      reason: "Added the comparison sheet the pilot classes asked for.",
+    };
+  }
+
+  it("POSITIVE: an author attaches a material inside a draft", () => {
+    const saved = addLessonMaterial(user("u_haddad"), material(DRAFT), "pol-mat-1");
+    expect(saved.kind).toBe("worksheet");
+    expect(authoredLesson(DRAFT, LESSON)?.materials).toHaveLength(1);
+  });
+
+  it("NEGATIVE: not even an author attaches one to a published version", () => {
+    expect(() =>
+      addLessonMaterial(user("u_haddad"), material(PUBLISHED), "pol-mat-2"),
+    ).toThrow(/draft/);
+    expect(authoredLesson(PUBLISHED, LESSON)).toBeUndefined();
+  });
+
+  it("POSITIVE: everyone in the organization reads materials once published", () => {
+    addLessonMaterial(user("u_haddad"), material(DRAFT), "pol-mat-3");
+    saveLessonScript(user("u_haddad"), script(DRAFT), "pol-mat-4");
+
+    // Not before publication: a draft is working state, not something a student
+    // is told to open.
+    expect(resolveLessonContent(DRAFT, LESSON).materials).toHaveLength(0);
+
+    submitForReview(user("u_haddad"), DRAFT, "Ready.", "pol-mat-5");
+    approveVersion(user("u_haddad"), DRAFT, "Approved.", "pol-mat-6");
+    publishVersion(user("u_haddad"), DRAFT, "Published.", "pol-mat-7");
+
+    const resolved = resolveLessonContent(DRAFT, LESSON);
+    expect(resolved.materials).toHaveLength(1);
+    // The access note travels with it, or the material excludes someone.
+    expect(resolved.materials[0].accessNote.length).toBeGreaterThan(0);
   });
 });

@@ -201,9 +201,12 @@ Stated plainly, because the interface states them too:
 - **Spiral Review is only as deep as the item bank.** Courses with no authored
   items offer no review rather than borrowing a question from elsewhere, which
   is the correct behaviour and is visible in grades 7 and 11–12.
-- **Video is stored as an address, not a file.** The lesson studio takes the
-  https address of a video plus a required transcript; uploading the file itself
-  needs Supabase Storage, which is not provisioned
+- **Video and materials are stored as an address, not a file.** The lesson
+  studio takes the https address of a video plus a required transcript, and of a
+  material — a reading, worksheet, deck, data set, or reference sheet — plus a
+  required statement of what the student does with it and how a student who
+  cannot open that format gets the same content. Uploading the file itself needs
+  Supabase Storage, which is not provisioned
   ([ADR 0010](docs/decisions/0010-lesson-studio.md)).
 - **Not built, and not implied to be:** file upload and downloadable workbooks,
   role-change controls, configurable return rules, producing an actual export
@@ -213,8 +216,15 @@ Stated plainly, because the interface states them too:
   38-course taxonomy and appear on the student's subject list marked as not in
   the catalog. Adding them means authoring curriculum, which is a curriculum
   owner's decision.
-- **`authored_lessons.instruction` is superseded but not dropped.** The lesson
-  canvas replaced it in migration 0007; removing the column is a destructive
-  change and needs its own approved plan (CLAUDE.md §2).
+- **A course version can be re-sequenced, but only within its units.** A lesson
+  moves inside its own unit and a unit moves inside its course, so no unit
+  changes lesson count and the 135 + 40 = 175 contract holds by construction.
+  Moving a lesson into a different unit would change two unit day budgets at
+  once, which is a blueprint decision rather than an authoring one
+  ([ADR 0013](docs/decisions/0013-curriculum-governance.md)).
+- **Foundation strength is governed, never inferred.** The workbook records that
+  a lesson names six pieces of prior learning and what role each plays; how hard
+  each binds is a curriculum author's judgement, and an ungoverned link says so
+  rather than showing an invented number.
 - **No AI tutor or assistant**, by design and by the owner's explicit
   confirmation ([ADR 0006](docs/decisions/0006-myjourney-capabilities.md)).

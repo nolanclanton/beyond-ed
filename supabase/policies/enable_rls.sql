@@ -34,6 +34,14 @@ alter table public.lesson_items      enable row level security;
 -- Added in migration 0007 — the lesson canvas.
 alter table public.lesson_blocks     enable row level security;
 
+-- Added in migration 0009 — the materials a lesson hands a student.
+alter table public.lesson_materials  enable row level security;
+
+-- Added in migration 0011 — how a course version differs from the workbook.
+alter table public.course_structures            enable row level security;
+alter table public.course_structure_units       enable row level security;
+alter table public.course_structure_foundations enable row level security;
+
 -- Views inherit the policies of their base tables when created with
 -- security_invoker, which is what makes `evidence_current` safe to read.
 alter view public.evidence_current       set (security_invoker = on);
