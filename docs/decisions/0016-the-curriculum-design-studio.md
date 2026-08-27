@@ -272,12 +272,38 @@ that every surface shows rather than composing its own.
   removes it from every author's panel on their next page load; a proposal
   already on somebody's screen is unaffected, because a proposal is not
   curriculum and accepting one goes through the ordinary authoring path.
-- Migrations 0022 through 0025 are written but **not applied to the hosted
-  database** — applying them needs approval (CLAUDE.md §2, §11). The beta runs
-  the same shapes in memory, as it has since ADR 0002.
-- **Not verified in a browser.** The local checkout has no Supabase credentials
-  and there is no demo identity to fall back on, so the studio pages could not be
-  signed into and rendered. The build compiles every route, the unauthenticated
+- Migrations were **applied to the hosted database on 2026-08-27**, with
+  approval: 0022 (grants), 0023 (narratives), 0024 (assets and generations),
+  0025 (capability settings), 0026 (lesson block sections), 0027 (a correction).
+  Three things had to be put right on the way, and all three are in the files:
+
+  - **0023's unique index could never have been created.** An index expression
+    must be IMMUTABLE, and `narrative_of_chapter` reads another table, so it is
+    STABLE at best. Marking it immutable to satisfy the index would be a lie the
+    planner is entitled to believe, and a stale entry would silently permit the
+    duplicate the index exists to prevent. It is a trigger now — which also says
+    something useful when it fires, where a unique-index violation would not.
+  - **0022 over-granted.** It gave `authenticated` EXECUTE on
+    `curriculum_grants_of(uuid)`, following 0018's pattern for policy helpers.
+    That bought nothing — the policies reach it only through two `auth.uid()`
+    wrappers, which are SECURITY DEFINER and so call it as the owner — and it
+    exposed a lookup of anybody's curriculum authorization over REST. Supabase's
+    own database linter surfaced it after the fact. Revoked in 0027; 0022 keeps
+    the grant in its file, because migrations are forward-only and the file
+    records what ran (CLAUDE.md §2).
+  - **The lesson-section migration was mis-numbered.** It was written as 0021,
+    but the hosted database already had a 0021: `my_roles_only`, which ADR 0014
+    describes and which has no file in this repository. Two migrations under one
+    number would make `supabase db push` skip this one as already applied and
+    leave `lesson_blocks.section` missing on a fresh environment, silently. It is
+    0026.
+
+  The applied ledger was realigned from `apply_migration`'s timestamps to this
+  repository's `00NN` numbering, so file and ledger agree.
+
+- **Not verified in a browser.** Neither the local checkout nor the Vercel
+  preview environment has Supabase credentials — they are scoped to Production —
+  so the studio pages could not be signed into and rendered before shipping. The build compiles every route, the unauthenticated
   refusal of `/api/ai/assist` was exercised live, and the domain is covered by
   tests — but nobody has yet looked at these screens.
 - **Not built:** narrative branching, collaborative editing with presence,

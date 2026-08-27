@@ -281,9 +281,6 @@ create table public.narrative_beats (
 create index on public.narrative_beats (chapter_id, position);
 create index on public.narrative_beats (lesson_code);
 
--- One lesson sits at ONE point in the story. Two beats on the same lesson would
--- make the lesson workshop show one of two stories, chosen by whichever row
--- came back first.
 create or replace function public.narrative_of_chapter(chapter uuid)
 returns uuid
 language sql stable security definer set search_path = public
@@ -291,9 +288,60 @@ as $$
   select narrative_id from public.narrative_chapters where id = chapter;
 $$;
 
-create unique index narrative_beats_one_per_lesson_idx
-  on public.narrative_beats (public.narrative_of_chapter(chapter_id), lesson_code)
-  where lesson_code is not null;
+-- One lesson sits at ONE point in the story. Two beats on the same lesson would
+-- make the lesson workshop show one of two stories, chosen by whichever row came
+-- back first.
+--
+-- A TRIGGER rather than the unique index this obviously wants, for a reason
+-- Postgres decides rather than us: an index expression must be IMMUTABLE, and
+-- the narrative a beat belongs to is reached through its chapter — a read of
+-- another table, which is STABLE at best. Marking `narrative_of_chapter`
+-- immutable to satisfy the index would be a lie the planner is entitled to
+-- believe, and a stale index entry here would silently allow the duplicate this
+-- exists to prevent.
+--
+-- Denormalising `narrative_id` onto the beat would also work and is the usual
+-- answer. It is not taken because it introduces a second copy of a fact that
+-- must never disagree with the first, and the trigger costs nothing on a table
+-- written one row at a time by a person.
+--
+-- The trigger also says something useful when it fires, which a unique-index
+-- violation would not.
+create or replace function public.reject_duplicate_beat_lesson()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare
+  target_narrative uuid;
+  clash_title text;
+begin
+  if new.lesson_code is null then
+    return new;
+  end if;
+
+  target_narrative := public.narrative_of_chapter(new.chapter_id);
+
+  select c.title into clash_title
+  from public.narrative_beats b
+  join public.narrative_chapters c on c.id = b.chapter_id
+  where c.narrative_id = target_narrative
+    and b.lesson_code = new.lesson_code
+    and b.id is distinct from new.id
+  limit 1;
+
+  if clash_title is not null then
+    raise exception
+      '% already has a beat in "%". A lesson sits at one point in the story.',
+      new.lesson_code, clash_title;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger narrative_beats_one_per_lesson
+  before insert or update on public.narrative_beats
+  for each row execute function public.reject_duplicate_beat_lesson();
 
 -- ---------------------------------------------------------------------------
 -- Plot threads
@@ -449,6 +497,7 @@ revoke execute on function public.narrative_is_editable(uuid)      from public, 
 revoke execute on function public.narrative_of_chapter(uuid)       from public, anon, authenticated;
 revoke execute on function public.reject_non_draft_narrative()     from public, anon, authenticated;
 revoke execute on function public.reject_provenance_change()       from public, anon, authenticated;
+revoke execute on function public.reject_duplicate_beat_lesson()   from public, anon, authenticated;
 
 grant execute on function public.narrative_is_editable(uuid) to authenticated;
 grant execute on function public.narrative_of_chapter(uuid)  to authenticated;

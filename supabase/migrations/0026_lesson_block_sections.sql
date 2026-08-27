@@ -1,6 +1,13 @@
 -- ============================================================================
--- 0021 — Which part of the lesson an element sits in
+-- 0026 — Which part of the lesson an element sits in
 -- ============================================================================
+--
+-- Numbered 0026, not 0021. It was written as 0021 before anyone noticed the
+-- hosted database already had a 0021 — `my_roles_only`, the migration ADR 0014
+-- describes as taking `roles_held(uuid)` off the public API, which has no file
+-- in this repository. Two different migrations under one number would make
+-- `supabase db push` skip this one as already applied and leave the column
+-- missing on a fresh environment, silently.
 --
 -- 0007 gave a lesson a canvas, and every block on it was stage 5: instruction.
 -- A lesson has seven parts a person actually writes, and an author needs a

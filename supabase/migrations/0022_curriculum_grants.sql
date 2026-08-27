@@ -99,6 +99,11 @@ grant execute on function public.curriculum_grants_of(uuid)    to authenticated;
 grant execute on function public.is_curriculum_reviewer()      to authenticated;
 grant execute on function public.is_curriculum_administrator() to authenticated;
 
+-- NOTE: the grant on `curriculum_grants_of(uuid)` above was a mistake and is
+-- revoked by migration 0027. It is left here because this migration has been
+-- applied and migrations are forward-only (CLAUDE.md §2) — the file records what
+-- ran, and the correction is its own migration.
+
 -- ---------------------------------------------------------------------------
 -- Verify
 -- ---------------------------------------------------------------------------

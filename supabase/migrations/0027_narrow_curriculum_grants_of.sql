@@ -1,0 +1,44 @@
+-- ============================================================================
+-- 0027 — Take the grants resolver off the public API
+-- ============================================================================
+--
+-- Migration 0022 granted EXECUTE on `curriculum_grants_of(uuid)` to
+-- `authenticated`, following the pattern 0018 established for policy helpers.
+-- That was wrong here, and Supabase's own database linter is what surfaced it
+-- after 0022 was applied.
+--
+-- The function answers "what may THIS person do with curriculum" for ANY id. No
+-- policy needs that: every policy reaches it through `is_curriculum_reviewer()`
+-- and `is_curriculum_administrator()`, which pass `auth.uid()` and are
+-- themselves SECURITY DEFINER — so the inner call runs as the function's owner
+-- and does not depend on the caller holding EXECUTE at all.
+--
+-- What the grant bought, therefore, was nothing. What it cost was a
+-- `/rest/v1/rpc/curriculum_grants_of` endpoint on which any signed-in person
+-- could look up any colleague's curriculum authorization. Not a severe leak —
+-- it discloses authorization, not student data — but it is disclosure with no
+-- purpose, which is the easiest kind to remove.
+--
+-- Forward-only. 0022 keeps the grant in its file because that is what ran; this
+-- is the correction, as CLAUDE.md §2 requires.
+--
+-- Not destructive: no table, column, or row is touched.
+
+revoke execute on function public.curriculum_grants_of(uuid) from authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Verify
+-- ---------------------------------------------------------------------------
+--
+-- The resolver is closed to clients and the two wrappers still answer. Expect
+-- false, true, true:
+--
+--   select
+--     has_function_privilege('authenticated', 'public.curriculum_grants_of(uuid)', 'execute'),
+--     has_function_privilege('authenticated', 'public.is_curriculum_reviewer()', 'execute'),
+--     has_function_privilege('authenticated', 'public.is_curriculum_administrator()', 'execute');
+--
+-- And a policy that depends on it still resolves. Expect the caller's own
+-- grants, not an error:
+--
+--   select public.is_curriculum_administrator();

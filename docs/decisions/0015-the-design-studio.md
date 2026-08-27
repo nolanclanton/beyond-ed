@@ -43,9 +43,11 @@ They are built in the quiz, not laid out.
 **Reading order stays lesson-wide.** One ordered list per lesson; a section's
 order is that list filtered to the section. That is one ordering to keep
 straight rather than seven, and it leaves the `unique (authored_lesson_id,
-position)` constraint from migration 0007 exactly as it was. Migration 0021 adds
+position)` constraint from migration 0007 exactly as it was. Migration 0026 adds
 the column with a `'instruction'` default, which restates what every existing
-row already meant rather than guessing at it.
+row already meant rather than guessing at it. (It was written as 0021; the
+hosted database already had a 0021 — `my_roles_only` — so it was renumbered
+before being applied. See ADR 0016.)
 
 Two consequences follow from the ordering choice, and both are enforced in the
 domain rather than left to the UI:
@@ -119,9 +121,8 @@ meant to keep working does not open a second version by accident.
   and now have two pages.
 - Every studio write is the same validated, transactional, audited server action
   as before; the audit event records the section on both sides of a change.
-- Migration 0021 is written but **not applied to the hosted database** —
-  applying it needs approval (CLAUDE.md §2, §11). The beta runs the same shapes
-  in memory.
+- Migration 0026 (written as 0021) was **applied to the hosted database on
+  2026-08-27**, with approval, alongside the design studio's own migrations.
 - Not built: drag-and-drop reordering, and multi-element selection. Arrow moves
   are accessible and complete; pointer dragging would be an addition on top of a
   working keyboard path, not a replacement for it.
