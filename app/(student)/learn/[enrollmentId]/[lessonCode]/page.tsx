@@ -9,13 +9,14 @@ import {
   lessonType,
 } from "@/lib/curriculum/catalog";
 import { LESSON_STAGES, LESSON_STATUS_PRESENTATION } from "@/lib/curriculum/lesson-status";
+import { blocksInSection } from "@/lib/curriculum/lesson-sections";
 import {
   LessonBlocks,
   LessonMaterialList,
   LessonVideoPlayer,
 } from "@/lib/design/lesson-blocks";
 import type { LessonContent } from "@/lib/db/demo-lesson-content";
-import type { LessonMaterial, LessonVideo } from "@/lib/db/types";
+import type { LessonMaterial, LessonSection, LessonVideo } from "@/lib/db/types";
 import {
   itemsForLesson,
   resolveLessonContent,
@@ -373,20 +374,35 @@ type StageBodyProps = {
 
 function StageBody(props: StageBodyProps) {
   const { stage, content, videos, materials } = props;
-  // Videos and materials the author attached but did not place on the canvas.
+  const blocks = content?.blocks ?? [];
+  /**
+   * Videos and materials the author attached but placed nowhere in the lesson.
+   * The sweep reads every section, not only the instruction stage — a video
+   * placed in the worked model is placed, and listing it again as unreached
+   * would show the student the same thing twice.
+   */
   const placedVideoIds = new Set(
-    (content?.instruction ?? [])
-      .filter((b) => b.kind === "video")
-      .map((b) => (b.kind === "video" ? b.videoId : "")),
+    blocks.filter((b) => b.kind === "video").map((b) => (b.kind === "video" ? b.videoId : "")),
   );
   const unplacedVideos = videos.filter((v) => !placedVideoIds.has(v.id));
   const placedMaterialIds = new Set(
-    (content?.instruction ?? [])
+    blocks
       .filter((b) => b.kind === "material")
       .map((b) => (b.kind === "material" ? b.materialId : "")),
   );
   const unplacedMaterials = materials.filter((m) => !placedMaterialIds.has(m.id));
   const title = LESSON_STAGES[stage - 1];
+
+  /** What the author composed into one stage, rendered after its script. */
+  const composed = (section: LessonSection) => {
+    const placed = blocksInSection(blocks, section);
+    if (placed.length === 0) return null;
+    return (
+      <div className="mt-5">
+        <LessonBlocks blocks={placed} videos={videos} materials={materials} />
+      </div>
+    );
+  };
 
   const notAuthored = (
     <Empty>
@@ -414,6 +430,7 @@ function StageBody(props: StageBodyProps) {
                     <li key={line}>{line}</li>
                   ))}
                 </ol>
+                {composed("notes")}
                 <p className="mt-4 text-xs text-ink-muted">
                   Use your browser&rsquo;s print command to keep a paper copy. A
                   downloadable workbook file is not built yet.
@@ -474,7 +491,10 @@ function StageBody(props: StageBodyProps) {
           <CardHeader title={`3. ${title}`} hint="What the problem is and why it matters." />
           <div className="p-5">
             {content ? (
-              <p className="max-w-2xl text-base text-ink">{content.relevance}</p>
+              <>
+                <p className="max-w-2xl text-base text-ink">{content.relevance}</p>
+                {composed("relevance")}
+              </>
             ) : (
               notAuthored
             )}
@@ -510,6 +530,7 @@ function StageBody(props: StageBodyProps) {
                   <span className="font-semibold">Evidence required: </span>
                   {props.assessment}
                 </p>
+                {composed("goal")}
               </>
             ) : (
               notAuthored
@@ -535,7 +556,7 @@ function StageBody(props: StageBodyProps) {
             {content ? (
               <>
                 <LessonBlocks
-                  blocks={content.instruction}
+                  blocks={blocksInSection(blocks, "instruction")}
                   videos={videos}
                   materials={materials}
                 />
@@ -590,19 +611,22 @@ function StageBody(props: StageBodyProps) {
           />
           <div className="p-5">
             {content ? (
-              <ol className="space-y-4">
-                {content.workedModel.map((step, i) => (
-                  <li key={step.step} className="flex gap-4">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-surface text-sm font-bold text-primary">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-base text-ink">{step.step}</p>
-                      <p className="mt-1 text-sm text-ink-muted">{step.reasoning}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+              <>
+                <ol className="space-y-4">
+                  {content.workedModel.map((step, i) => (
+                    <li key={step.step} className="flex gap-4">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-surface text-sm font-bold text-primary">
+                        {i + 1}
+                      </span>
+                      <div>
+                        <p className="text-base text-ink">{step.step}</p>
+                        <p className="mt-1 text-sm text-ink-muted">{step.reasoning}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                {composed("worked_model")}
+              </>
             ) : (
               notAuthored
             )}
@@ -645,6 +669,7 @@ function StageBody(props: StageBodyProps) {
             ) : (
               notAuthored
             )}
+            {composed("guided_practice")}
             <p className="mt-5 text-xs text-ink-muted">
               Guided practice here is self-checked and is not recorded as evidence.
               Only the Spiral Review and the Exit Ticket write to your record.
@@ -664,6 +689,7 @@ function StageBody(props: StageBodyProps) {
             {content ? (
               <>
                 <p className="max-w-2xl text-base text-ink">{content.independentTask}</p>
+                {composed("independent")}
                 <p className="mt-4 text-sm text-ink-muted">
                   Do this in your notes or workbook. Uploading work from the browser
                   is not built yet, so your teacher collects it directly.

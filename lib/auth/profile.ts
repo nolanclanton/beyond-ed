@@ -15,7 +15,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { Role, User } from "@/lib/db/types";
+import type { CurriculumGrant, Role, User } from "@/lib/db/types";
 
 /** The shape `public.users` returns. Snake case, as Postgres stores it. */
 type ProfileRow = {
@@ -55,7 +55,11 @@ const PROFILE_COLUMNS: string =
  * `primaryRole` is kept for display: it is what the person was provisioned as,
  * and it is the one hat that cannot be taken away without deactivating them.
  */
-export function toUser(row: ProfileRow, heldRoles: Role[] = []): User {
+export function toUser(
+  row: ProfileRow,
+  heldRoles: Role[] = [],
+  curriculumGrants?: CurriculumGrant[],
+): User {
   return {
     id: row.id,
     orgId: row.org_id,
@@ -66,8 +70,45 @@ export function toUser(row: ProfileRow, heldRoles: Role[] = []): User {
     primaryRole: row.role,
     heldRoles: heldRoles.length > 0 ? heldRoles : [row.role],
     curriculumAuthor: row.curriculum_author,
+    // Undefined means "whatever `curriculumAuthor` alone implies", which
+    // `curriculumGrantsOf` resolves to `author`. That is deliberately the same
+    // answer an account provisioned before the grants existed gets.
+    curriculumGrants,
     gradeLevel: row.grade_level,
   };
+}
+
+/**
+ * The caller's curriculum grants, read separately and allowed to fail.
+ *
+ * A separate query rather than another column on `PROFILE_COLUMNS`, for one
+ * reason that matters more than tidiness: **code is deployed and migrations are
+ * applied at different moments.** Adding `curriculum_grants` to the main select
+ * would mean that deploying this build before migration 0022 had run turned
+ * every sign-in into "column does not exist" — the whole product down, for
+ * everybody, because of a curriculum authoring feature.
+ *
+ * So it is asked for on its own and a failure is swallowed. The fallback is
+ * `undefined`, which resolves to `author` — the access the account already had.
+ * That is the narrower outcome and the safe one, which is the same reasoning
+ * `my_roles()` below is treated with.
+ */
+async function loadCurriculumGrants(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<CurriculumGrant[] | undefined> {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("curriculum_grants")
+      .eq("id", userId)
+      .maybeSingle<{ curriculum_grants: CurriculumGrant[] | null }>();
+
+    if (error || !data || data.curriculum_grants === null) return undefined;
+    return Array.isArray(data.curriculum_grants) ? data.curriculum_grants : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -117,5 +158,7 @@ export async function loadProfile(
     ? (roles as Role[]).filter((r): r is Role => typeof r === "string")
     : [];
 
-  return { kind: "ok", user: toUser(data, heldRoles) };
+  const curriculumGrants = await loadCurriculumGrants(supabase, userId);
+
+  return { kind: "ok", user: toUser(data, heldRoles, curriculumGrants) };
 }

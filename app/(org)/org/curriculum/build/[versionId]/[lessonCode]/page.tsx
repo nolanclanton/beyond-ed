@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { assistantUnavailableReason } from "@/lib/ai/config";
+import { capabilityCatalog } from "@/lib/ai/gateway";
+import { generationsForLesson } from "@/lib/ai/generations";
 import { requireUser } from "@/lib/auth/session";
+import { formatDateTime } from "@/lib/clock";
 import {
   courseSlug,
   getCourse,
@@ -21,12 +25,17 @@ import {
   ITEM_PURPOSES,
   lessonReadiness,
 } from "@/lib/curriculum/lesson-authoring";
+import {
+  LESSON_SECTION_PARTS,
+  sectionCounts,
+} from "@/lib/curriculum/lesson-sections";
 import { supportById } from "@/lib/intervention/bank";
 import { ALL_ITEMS } from "@/lib/db/demo-items";
 import { db } from "@/lib/db/store";
 import type { AuthoredQuizItem } from "@/lib/db/types";
 import {
   Banner,
+  ButtonLink,
   Card,
   CardHeader,
   Empty,
@@ -36,22 +45,20 @@ import {
 } from "@/lib/design/primitives";
 import { UnitArc } from "@/lib/design/curriculum";
 import {
-  BLOCK_LABELS,
-  blockSummary,
   LessonBlocks,
   LessonMaterialCard,
   LessonVideoPlayer,
 } from "@/lib/design/lesson-blocks";
 import { FOCUS_RING } from "@/lib/design/tokens";
+import { beatForLesson, narrativesForLesson } from "@/lib/narrative/bible";
+
+import { AssistancePanel, type CapabilityOption } from "../../../assistance";
+import { StudentPreview } from "./student-preview";
 
 import {
-  AddBlockPanel,
   AddMaterialForm,
   AddVideoForm,
-  EditBlockPanel,
-  MoveBlockForm,
   QuizItemForm,
-  RemoveBlockForm,
   RemoveItemForm,
   RemoveMaterialForm,
   RemoveVideoForm,
@@ -64,13 +71,13 @@ export const metadata: Metadata = {
 };
 
 /**
- * The lesson designer.
+ * One lesson's workbench.
  *
- * Four things on one page, in the order a lesson is actually made: what the
- * course plan already fixed, the canvas a student reads, the media it carries,
- * and the items that produce evidence. The canvas is shown exactly as a student
- * will meet it — one renderer serves both, so there is no preview that can
- * drift from the real thing.
+ * What the course plan already fixed, where the lesson's elements are laid out,
+ * the media it carries, the script the studio composes around, and the items
+ * that produce evidence. Laying the elements out is a job of its own and has
+ * its own page — the design studio at `./design` — so this page summarises the
+ * layout and hands off rather than trying to be both.
  *
  * When the version is not a draft, or the reader does not hold the authoring
  * authorization, everything renders read-only with the reason stated. No
@@ -111,6 +118,17 @@ export default async function LessonEditorPage({
   const blocks = draft?.blocks ?? [];
   const videos = draft?.videos ?? [];
   const materials = draft?.materials ?? [];
+
+  // The story this lesson sits in, if a narrative has placed a beat on it.
+  // A soft join by lesson code: re-sequencing a course moves the lesson without
+  // breaking the story, and a narrative reused elsewhere simply matches nothing.
+  const narratives = narrativesForLesson(actor, lessonCode);
+  const narrative = narratives[0] ?? null;
+  const placement = narrative ? beatForLesson(narrative, lessonCode) : undefined;
+  const generations = generationsForLesson(version.id, lessonCode);
+  const assistedAccepted = generations.filter(
+    (g) => g.status === "accepted" || g.status === "accepted_edited",
+  );
 
   const at = unit.lessons.findIndex((l) => l.code === lesson.code);
   const previous = at > 0 ? unit.lessons[at - 1] : null;
@@ -327,119 +345,247 @@ export default async function LessonEditorPage({
         </Card>
       </section>
 
-      <section aria-labelledby="canvas" className="mt-10">
+      <section aria-labelledby="narrative" className="mt-10">
         <SectionHeading
-          id="canvas"
-          hint="Stage 5, exactly as a student meets it. Text, callouts, lists, key terms, tables, images, and video, in the order you place them."
+          id="narrative"
+          hint="Where this lesson sits in the unit's story, and what the learning lets a student do in it."
         >
-          Lesson canvas ({blocks.length})
+          Narrative transition
+        </SectionHeading>
+        <Card>
+          {narrative && placement ? (
+            <>
+              <CardHeader
+                title={`${narrative.title} — ${placement.chapter.title}`}
+                hint={narrative.premise || "No premise written."}
+                action={
+                  <ButtonLink
+                    href={`/org/curriculum/narrative/${narrative.id}?part=chapters`}
+                    emphasis="quiet"
+                  >
+                    Open the studio &rarr;
+                  </ButtonLink>
+                }
+              />
+              <div className="p-5">
+                <FactList
+                  columns={1}
+                  items={[
+                    {
+                      label: "Where the story is when this lesson starts",
+                      value:
+                        narrative.state.currentObjective ||
+                        "The narrative state does not say yet.",
+                    },
+                    {
+                      label: "What happens in this lesson",
+                      value: placement.beat.narrativeEvent,
+                    },
+                    {
+                      label: "The narrative problem driving the learning",
+                      value: placement.beat.learningUnlock ? (
+                        <>The learning lets the student {placement.beat.learningUnlock}</>
+                      ) : (
+                        <span className="text-recall">
+                          Nothing says what the learning lets the student do, so the
+                          story decorates this lesson rather than needing it.
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <CardHeader
+                title="No narrative placed on this lesson"
+                hint="A lesson does not need one. Where there is one, it travels with every assisted request about this lesson."
+                action={
+                  <ButtonLink href="/org/curriculum/narrative" emphasis="quiet">
+                    Narrative Bank &rarr;
+                  </ButtonLink>
+                }
+              />
+              <div className="p-5">
+                <Empty>
+                  Place a beat on {lessonCode} in a narrative&rsquo;s chapter map and
+                  it appears here.
+                </Empty>
+              </div>
+            </>
+          )}
+        </Card>
+      </section>
+
+      {gate.editable ? (
+        <section aria-labelledby="assist" className="mt-10">
+          <SectionHeading
+            id="assist"
+            hint="Bounded requests about this lesson. Every one returns a proposal, and nothing is written until you accept it."
+          >
+            Design assistance
+          </SectionHeading>
+          <AssistancePanel
+            heading="Gemini Design Assistant"
+            hint="One click, one request. The lesson, its standards, and its prerequisites are sent for you."
+            capabilities={lessonCapabilities(actor.orgId)}
+            target={{
+              courseVersionId: version.id,
+              lessonCode,
+              narrativeId: narrative?.id ?? null,
+              chapterId: placement?.chapter.id ?? null,
+              standard: lesson.primaryStandard,
+            }}
+            unavailableReason={assistantUnavailableReason()}
+            seq={1}
+          />
+        </section>
+      ) : null}
+
+      {generations.length > 0 ? (
+        <section aria-labelledby="assist-history" className="mt-8">
+          <SectionHeading
+            id="assist-history"
+            hint="What was asked for, and what a person decided about it."
+          >
+            Assistance history
+          </SectionHeading>
+          <Card>
+            <CardHeader
+              title={
+                assistedAccepted.length === 0
+                  ? "No assisted content in this lesson"
+                  : `${assistedAccepted.length} assisted ${assistedAccepted.length === 1 ? "contribution" : "contributions"} accepted`
+              }
+              hint="Accepted material is ordinary draft curriculum and is reviewed and published like any other."
+              action={
+                assistedAccepted.length > 0 ? (
+                  <StatusChip label="AI-assisted" tone="info" />
+                ) : (
+                  <StatusChip label="Written by hand" tone="neutral" />
+                )
+              }
+            />
+            <ul className="divide-y divide-line">
+              {generations.slice(0, 10).map((g) => (
+                <li key={g.id} className="px-5 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-ink">
+                      {g.capability.replace(/_/g, " ")}
+                    </p>
+                    <StatusChip
+                      label={g.status.replace(/_/g, " ")}
+                      tone={
+                        g.status === "accepted" || g.status === "accepted_edited"
+                          ? "positive"
+                          : g.status === "failed"
+                            ? "attention"
+                            : "neutral"
+                      }
+                    />
+                  </div>
+                  {g.instructions ? (
+                    <p className="mt-0.5 text-sm text-ink-muted">
+                      Asked for: {g.instructions}
+                    </p>
+                  ) : null}
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    {formatDateTime(g.requestedAt)} · {g.model}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      ) : null}
+
+      <section aria-labelledby="student-preview" className="mt-10">
+        <SectionHeading
+          id="student-preview"
+          hint="The same components the lesson player uses, at the width a student meets them."
+        >
+          Student preview
+        </SectionHeading>
+        <Card>
+          <div className="p-5">
+            {blocks.length === 0 ? (
+              <Empty>
+                Nothing is laid out yet, so there is nothing for a student to read.
+              </Empty>
+            ) : (
+              <StudentPreview>
+                <LessonBlocks blocks={blocks} videos={videos} materials={materials} />
+              </StudentPreview>
+            )}
+          </div>
+        </Card>
+      </section>
+
+      <section aria-labelledby="layout" className="mt-10">
+        <SectionHeading
+          id="layout"
+          hint="Text, callouts, lists, key terms, tables, images, video, and materials, laid out into the parts of the lesson a student walks through."
+        >
+          Layout ({blocks.length} element{blocks.length === 1 ? "" : "s"})
         </SectionHeading>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader
-              title="Blocks"
-              hint={gate.editable ? "Reorder with the arrows." : "Read-only."}
-            />
-            <div className="p-5">
-              {blocks.length === 0 ? (
-                <Empty>
-                  Nothing on the canvas yet. A student would reach this stage and find
-                  it blank.
-                </Empty>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {blocks.map((block, index) => (
-                    <li
-                      key={block.id}
-                      className="rounded-lg border border-line p-3"
+        <Card>
+          <CardHeader
+            title="What is laid out where"
+            hint={
+              gate.editable
+                ? "Open the design studio to add elements and change their order."
+                : "Read-only. This is what a student meets."
+            }
+            action={
+              <ButtonLink
+                href={`/org/curriculum/build/${version.id}/${lessonCode}/design`}
+                emphasis="primary"
+              >
+                {gate.editable ? "Open the design studio" : "Open the layout"} &rarr;
+              </ButtonLink>
+            }
+          />
+          <div className="p-5">
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {LESSON_SECTION_PARTS.map((part) => {
+                const count = sectionCounts(blocks)[part.value];
+                return (
+                  <li key={part.value}>
+                    <Link
+                      href={`/org/curriculum/build/${version.id}/${lessonCode}/design?part=${part.value}`}
+                      className={`flex items-baseline justify-between gap-3 rounded-lg border border-line px-3 py-2.5 hover:border-primary-line ${FOCUS_RING}`}
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                            {index + 1}. {BLOCK_LABELS[block.kind]}
-                            {block.kind === "callout" ? ` · ${block.tone}` : ""}
-                          </p>
-                          <p className="mt-1 line-clamp-3 text-sm text-ink">
-                            {blockSummary(block)}
-                          </p>
-                        </div>
-                        {gate.editable ? (
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <MoveBlockForm
-                              versionId={version.id}
-                              lessonCode={lessonCode}
-                              blockId={block.id}
-                              position={index}
-                              direction="up"
-                              disabled={index === 0}
-                            />
-                            <MoveBlockForm
-                              versionId={version.id}
-                              lessonCode={lessonCode}
-                              blockId={block.id}
-                              position={index}
-                              direction="down"
-                              disabled={index === blocks.length - 1}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                      {gate.editable ? (
-                        <div className="mt-2 flex flex-wrap items-start gap-4">
-                          <EditBlockPanel
-                            versionId={version.id}
-                            lessonCode={lessonCode}
-                            videos={videos}
-                            materials={materials}
-                            block={block}
-                          />
-                          <RemoveBlockForm
-                            versionId={version.id}
-                            lessonCode={lessonCode}
-                            blockId={block.id}
-                          />
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {gate.editable ? (
-                <div className="mt-5">
-                  <AddBlockPanel
-                    versionId={version.id}
-                    lessonCode={lessonCode}
-                    videos={videos}
-                    materials={materials}
-                    seq={blocks.length}
-                  />
-                </div>
-              ) : null}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="What the student reads"
-              hint="The same renderer the lesson uses. Nothing here is a mock-up."
-            />
-            <div className="p-5">
-              {blocks.length === 0 ? (
-                <Empty>Add a block and it appears here.</Empty>
-              ) : (
-                <LessonBlocks blocks={blocks} videos={videos} materials={materials} />
-              )}
-            </div>
-          </Card>
-        </div>
+                      <span className="min-w-0">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                          Stage {part.stage}
+                        </span>
+                        <span className="block text-sm font-semibold text-ink">
+                          {part.label}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-sm text-ink-muted">
+                        {count === 0 ? "empty" : `${count} element${count === 1 ? "" : "s"}`}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-4 text-sm text-ink-muted">
+              Spiral Review, the Exit Ticket, and the next-step decision are not laid
+              out: they are produced by rule from stored evidence and the items
+              below.
+            </p>
+          </div>
+        </Card>
       </section>
 
       <section aria-labelledby="video" className="mt-10">
         <SectionHeading
           id="video"
-          hint="Attach a video here, then place it on the canvas where it belongs. A transcript is required."
+          hint="Attach a video here, then place it in the design studio where it belongs. A transcript is required."
         >
           Media ({videos.length})
         </SectionHeading>
@@ -468,7 +614,7 @@ export default async function LessonEditorPage({
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
                           <StatusChip
-                            label={placed ? "On the canvas" : "Not placed yet"}
+                            label={placed ? "Placed in the lesson" : "Not placed yet"}
                             tone={placed ? "positive" : "neutral"}
                           />
                           {gate.editable ? (
@@ -506,7 +652,7 @@ export default async function LessonEditorPage({
       <section aria-labelledby="materials" className="mt-10">
         <SectionHeading
           id="materials"
-          hint="Readings, worksheets, data sets, and reference sheets. Attach one here, then place it on the canvas where the student needs it."
+          hint="Readings, worksheets, data sets, and reference sheets. Attach one here, then place it in the design studio where the student needs it."
         >
           Materials ({materials.length})
         </SectionHeading>
@@ -537,7 +683,7 @@ export default async function LessonEditorPage({
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
                           <StatusChip
-                            label={placed ? "On the canvas" : "Not placed yet"}
+                            label={placed ? "Placed in the lesson" : "Not placed yet"}
                             tone={placed ? "positive" : "neutral"}
                           />
                           {gate.editable ? (
@@ -575,7 +721,7 @@ export default async function LessonEditorPage({
       <section aria-labelledby="script" className="mt-10">
         <SectionHeading
           id="script"
-          hint="The stages either side of the canvas: why the lesson exists, the goal, the worked model, guided practice, and what the student keeps."
+          hint="The written spine of the lesson: why it exists, the goal, the worked model, guided practice, and what the student keeps. Elements are laid out around it in the design studio."
         >
           The rest of the lesson
         </SectionHeading>
@@ -692,6 +838,34 @@ export default async function LessonEditorPage({
       </nav>
     </div>
   );
+}
+
+/**
+ * The capabilities that make sense with a whole lesson in view.
+ *
+ * A review and a misconception list are advisory: they produce findings, not
+ * content, and there is nothing to save. The panel says so rather than offering
+ * an Accept that would write nothing (CLAUDE.md §12).
+ */
+function lessonCapabilities(orgId: string): CapabilityOption[] {
+  const wanted = [
+    "generate_worked_example",
+    "generate_guided_practice",
+    "draft_exit_ticket",
+    "check_lesson_alignment",
+    "identify_misconceptions",
+    "brainstorm_narrative_hooks",
+    "continue_narrative",
+  ];
+  const advisory = new Set(["check_lesson_alignment", "identify_misconceptions"]);
+  return capabilityCatalog(orgId)
+    .filter((c) => wanted.includes(c.name) && c.enabled)
+    .map((c) => ({
+      name: c.name,
+      label: c.label,
+      summary: c.summary,
+      advisory: advisory.has(c.name),
+    }));
 }
 
 function QuizItemView({ item }: { item: AuthoredQuizItem }) {

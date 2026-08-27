@@ -15,7 +15,7 @@
  * has not been written yet. That is what the lesson studio is for.
  */
 
-import type { LessonBlock } from "./types";
+import type { LessonBlock, UnplacedLessonBlock } from "./types";
 
 export type LessonContent = {
   /** Stage 3 — introduction and relevance. */
@@ -23,8 +23,11 @@ export type LessonContent = {
   /** Stage 4 — goal and success criteria. */
   goal: string;
   successCriteria: string[];
-  /** Stage 5 — accessible instruction, as the composed lesson canvas. */
-  instruction: LessonBlock[];
+  /**
+   * Every composed element in the lesson, in one reading order. Each block
+   * names the stage it belongs to; a surface filters with `blocksInSection`.
+   */
+  blocks: LessonBlock[];
   vocabulary: { term: string; meaning: string }[];
   /** Stage 6 — worked model, exposing the reasoning rather than the answer. */
   workedModel: { step: string; reasoning: string }[];
@@ -36,9 +39,20 @@ export type LessonContent = {
   notesOutline: string[];
 };
 
+/**
+ * Places composed blocks into the instruction stage.
+ *
+ * The demonstration lessons predate sectioning and all of their content is
+ * stage-5 instruction, so it is stamped in one place rather than repeated on
+ * every literal.
+ */
+function instruction(blocks: UnplacedLessonBlock[]): LessonBlock[] {
+  return blocks.map((block) => ({ ...block, section: "instruction" }) as LessonBlock);
+}
+
 /** Plain paragraphs as canvas blocks — what most demo instruction is. */
 function paragraphs(...texts: string[]): LessonBlock[] {
-  return texts.map((text, i) => ({ id: `p${i + 1}`, kind: "text", text }));
+  return instruction(texts.map((text, i) => ({ id: `p${i + 1}`, kind: "text", text })));
 }
 
 const CONTENT: Record<string, LessonContent> = {
@@ -52,7 +66,7 @@ const CONTENT: Record<string, LessonContent> = {
       "I can use a unit rate to compare two options and say by how much.",
       "I can tell a multiplicative comparison from an additive one.",
     ],
-    instruction: [
+    blocks: instruction([
       {
         id: "p1",
         kind: "text",
@@ -85,7 +99,7 @@ const CONTENT: Record<string, LessonContent> = {
         kind: "text",
         text: "Getting the division backwards does not give a wrong number — it gives the answer to a different question. Both rows above are real. Only one answers what was asked.",
       },
-    ],
+    ]),
     vocabulary: [
       { term: "Rate", meaning: "A comparison of two quantities with different units." },
       { term: "Unit rate", meaning: "A rate stated per one unit of the second quantity." },
@@ -147,7 +161,7 @@ const CONTENT: Record<string, LessonContent> = {
       "I can write an objective summary with no opinion in it.",
       "I can pair a quotation with reasoning that says what it shows.",
     ],
-    instruction: paragraphs(
+    blocks: paragraphs(
       "A topic is a subject: honesty, courage, belonging. A theme is what the text says about that subject, written as a full sentence someone could agree or disagree with.",
       "Development is the part people skip. A theme that appears once is a moment; a theme that is developed changes, deepens, or costs the character something across the text.",
       "An objective summary reports the main events and the central idea without telling the reader what to feel about them."
@@ -218,7 +232,7 @@ const CONTENT: Record<string, LessonContent> = {
       "I can say why a comparison is or is not a fair test.",
       "I can replace a judgment word with a measured value and a unit.",
     ],
-    instruction: [
+    blocks: instruction([
       {
         id: "p1",
         kind: "text",
@@ -252,7 +266,7 @@ const CONTENT: Record<string, LessonContent> = {
         text: "B is the better cooler and still not the answer to the question that was asked. A constraint is not a tiebreaker; it is a boundary.",
         title: "Better is not the same as acceptable",
       },
-    ],
+    ]),
     vocabulary: [
       { term: "Criterion", meaning: "A stated measure of success." },
       { term: "Constraint", meaning: "A limit the solution must stay inside." },
@@ -310,7 +324,7 @@ const CONTENT: Record<string, LessonContent> = {
       "I can support a claim with physical or documentary evidence.",
       "I can say why one cause is not enough.",
     ],
-    instruction: paragraphs(
+    blocks: paragraphs(
       "Chronology is not just order — it is dependency. 'After surplus grain could be stored, some people stopped farming full time' says which came first AND why the second needed the first.",
       "Conditions make a change possible. Triggers set it off. Causes connect them. Collapsing all three into one sentence is what makes an explanation thin.",
       "Evidence for early history is mostly physical: what was found, where, and how much of it. Weight and repetition matter — storage pits and rebuilt foundations say 'permanent' in a way one arrowhead does not."
@@ -377,7 +391,7 @@ const CONTENT: Record<string, LessonContent> = {
       "I can identify the domain and range in a real context.",
       "I can evaluate a function in context and check the result against the situation.",
     ],
-    instruction: paragraphs(
+    blocks: paragraphs(
       "A function assigns exactly ONE output to each input. Repeated outputs are fine — {(1,4), (2,4)} is a function. Repeated inputs with different outputs are not — {(1,4), (1,5)} is not.",
       "f(x) is a name for an output, not a product. The f is the function's name, the x is the input, and f(x) is what comes out.",
       "In context, the domain is the set of inputs — the thing that causes — and the range is the set of outputs."
@@ -439,7 +453,7 @@ const CONTENT: Record<string, LessonContent> = {
       "I can embed a quotation inside my own sentence.",
       "I can follow every quotation with reasoning that names what it shows.",
     ],
-    instruction: paragraphs(
+    blocks: paragraphs(
       "'Emerges and is shaped' is a development claim. It asks how the idea got there and what pressed on it — not where it is stated.",
       "An integrated quotation sits inside your sentence, with your own words carrying the grammar. A dropped quotation stands alone as its own sentence and leaves the reader to do your work.",
       "Commentary is the sentence after the quotation. It names what the detail shows about the claim. Without it, evidence is decoration."

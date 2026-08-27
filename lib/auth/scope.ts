@@ -10,7 +10,7 @@
  * student -> course -> curriculum authorization.
  */
 import { db } from "@/lib/db/store";
-import type { Role, User } from "@/lib/db/types";
+import type { CurriculumGrant, Role, User } from "@/lib/db/types";
 
 export class NotAuthorizedError extends Error {
   constructor(what: string) {
@@ -129,6 +129,67 @@ export function assertCanAuthorCurriculum(actor: Actor): void {
   if (!canAuthorCurriculum(actor)) {
     throw new NotAuthorizedError(
       "curriculum authoring is a separate authorization you do not hold",
+    );
+  }
+}
+
+/**
+ * What a curriculum author may DO (vision §7).
+ *
+ * Resolved in exactly one place. An account that predates the design studio
+ * carries no grant list, and the answer for it is `author` — the access it
+ * already had, stated explicitly rather than inferred differently by each
+ * caller. Someone who holds no authoring authorization at all holds no grants,
+ * whatever their role: seniority is not a curriculum grant (CLAUDE.md §3).
+ */
+export function curriculumGrantsOf(actor: Actor): CurriculumGrant[] {
+  if (!canAuthorCurriculum(actor)) return [];
+  const granted = actor.curriculumGrants;
+  if (!granted || granted.length === 0) return ["author"];
+  return granted;
+}
+
+export function hasCurriculumGrant(actor: Actor, grant: CurriculumGrant): boolean {
+  return curriculumGrantsOf(actor).includes(grant);
+}
+
+/**
+ * Review a submitted narrative or lesson: comment, approve, return, reject.
+ *
+ * An administrator may review. An author may not review their own work, and
+ * the reason is the whole point of having two grants — see
+ * `assertCanReviewCurriculum`.
+ */
+export function canReviewCurriculum(actor: Actor): boolean {
+  return (
+    hasCurriculumGrant(actor, "reviewer") ||
+    hasCurriculumGrant(actor, "administrator")
+  );
+}
+
+export function assertCanReviewCurriculum(actor: Actor): void {
+  if (!canReviewCurriculum(actor)) {
+    throw new NotAuthorizedError(
+      "reviewing curriculum needs the reviewer authorization, which you do not hold",
+    );
+  }
+}
+
+/**
+ * Manage authoring itself: official templates, and which assistant
+ * capabilities are available to the organization.
+ *
+ * The narrowest of the three, because it is the one that changes what everyone
+ * else can do.
+ */
+export function canAdministerCurriculum(actor: Actor): boolean {
+  return hasCurriculumGrant(actor, "administrator");
+}
+
+export function assertCanAdministerCurriculum(actor: Actor): void {
+  if (!canAdministerCurriculum(actor)) {
+    throw new NotAuthorizedError(
+      "this is a curriculum administrator action and you do not hold that authorization",
     );
   }
 }

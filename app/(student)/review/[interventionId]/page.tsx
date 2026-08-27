@@ -6,6 +6,7 @@ import {
   readinessItemsForStandard,
   transferItemForStandard,
 } from "@/lib/curriculum/lesson-bank";
+import { blocksInSection } from "@/lib/curriculum/lesson-sections";
 import { lessonContent } from "@/lib/db/demo-lesson-content";
 import { db } from "@/lib/db/store";
 import {
@@ -174,7 +175,7 @@ export default async function SupportPage({
                 <div className="p-5">
                   <p className="text-base font-semibold text-ink">{teaching.goal}</p>
                   <div className="mt-3">
-                    <LessonBlocks blocks={teaching.instruction.slice(0, 2)} />
+                    <LessonBlocks blocks={blocksInSection(teaching.blocks, "instruction").slice(0, 2)} />
                   </div>
                 </div>
               </Card>

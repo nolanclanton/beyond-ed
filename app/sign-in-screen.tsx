@@ -158,10 +158,18 @@ export function SignInScreen({
                 logged with who did it and why.
               </li>
               <li>
-                <span className="font-semibold text-ink">No AI assistant.</span>{" "}
-                Beyond.Ed contains no tutor, chatbot, or copilot. Individualized
+                <span className="font-semibold text-ink">
+                  No AI tutor, and no AI in your work.
+                </span>{" "}
+                Beyond.Ed contains no tutor, chatbot, or copilot. Nothing
+                generative reads your work, your grades, or your progress, and
+                nothing generative decides anything about you. Individualized
                 review uses transparent, versioned curriculum rules over stored
-                evidence, and help comes from a person.
+                evidence, and help comes from a person. The one exception is out
+                of your way: the adults who write the curriculum have a
+                constrained design assistant, and nothing it drafts reaches a
+                lesson until a person has read it, accepted it, and published
+                it.
               </li>
             </ul>
           </section>
