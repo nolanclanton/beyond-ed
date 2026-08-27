@@ -44,6 +44,7 @@ import type {
   LessonBlock,
   LessonMaterial,
   LessonMaterialKind,
+  LessonSection,
   LessonVideo,
   User,
 } from "@/lib/db/types";
@@ -55,6 +56,7 @@ import {
   standardCode,
   type CatalogLesson,
 } from "./catalog";
+import { LESSON_SECTION_PART } from "./lesson-sections";
 
 export class LessonAuthoringError extends Error {
   constructor(message: string) {
@@ -181,8 +183,8 @@ export function lessonReadiness(
       detail: "How a student knows they met the goal, in their own words.",
     },
     {
-      label: "Instruction canvas has blocks",
-      done: (draft?.blocks.length ?? 0) > 0,
+      label: "Instruction stage has elements",
+      done: (draft?.blocks ?? []).some((b) => b.section === "instruction"),
       detail: "Stage 5 — the text, callouts, tables, images, and video a student reads.",
     },
     {
@@ -470,6 +472,8 @@ export type BlockInput = {
   lessonCode: string;
   /** Set when replacing an existing block; absent when placing a new one. */
   blockId: string | null;
+  /** Which lesson stage the element is composed into. */
+  section: LessonSection;
   kind: LessonBlock["kind"];
   text: string;
   title: string;
@@ -500,20 +504,21 @@ function buildBlock(
   input: BlockInput,
 ): LessonBlock {
   const text = input.text.trim();
+  const at = { id: blockId, section: input.section };
   switch (input.kind) {
     case "heading":
       if (text.length === 0) throw new LessonAuthoringError("A heading needs text.");
-      return { id: blockId, kind: "heading", text };
+      return { ...at, kind: "heading", text };
     case "text":
       if (text.length === 0) throw new LessonAuthoringError("A paragraph needs text.");
-      return { id: blockId, kind: "text", text };
+      return { ...at, kind: "text", text };
     case "callout":
       if (text.length === 0) throw new LessonAuthoringError("A callout needs text.");
-      return { id: blockId, kind: "callout", tone: input.tone, title: input.title.trim(), text };
+      return { ...at, kind: "callout", tone: input.tone, title: input.title.trim(), text };
     case "list": {
       const items = input.items.map((i) => i.trim()).filter(Boolean);
       if (items.length === 0) throw new LessonAuthoringError("A list needs at least one line.");
-      return { id: blockId, kind: "list", ordered: input.ordered, items };
+      return { ...at, kind: "list", ordered: input.ordered, items };
     }
     case "definition": {
       const term = input.term.trim();
@@ -521,7 +526,7 @@ function buildBlock(
       if (term.length === 0 || meaning.length === 0) {
         throw new LessonAuthoringError("A key term needs both the term and its meaning.");
       }
-      return { id: blockId, kind: "definition", term, meaning };
+      return { ...at, kind: "definition", term, meaning };
     }
     case "table": {
       const headers = input.headers.map((h) => h.trim()).filter(Boolean);
@@ -537,7 +542,7 @@ function buildBlock(
           return padded.slice(0, headers.length);
         });
       if (rows.length === 0) throw new LessonAuthoringError("A table needs at least one row.");
-      return { id: blockId, kind: "table", caption: input.caption.trim(), headers, rows };
+      return { ...at, kind: "table", caption: input.caption.trim(), headers, rows };
     }
     case "image": {
       const url = normalizeMediaUrl(input.url);
@@ -547,7 +552,7 @@ function buildBlock(
           "An image needs alternative text. Without it the image is simply missing for part of the class.",
         );
       }
-      return { id: blockId, kind: "image", url, alt, caption: input.caption.trim() };
+      return { ...at, kind: "image", url, alt, caption: input.caption.trim() };
     }
     case "video": {
       const video = lesson.videos.find((v) => v.id === input.videoId);
@@ -556,7 +561,7 @@ function buildBlock(
           "Attach the video to this lesson first; the canvas places a video it already has, with its transcript.",
         );
       }
-      return { id: blockId, kind: "video", videoId: video.id };
+      return { ...at, kind: "video", videoId: video.id };
     }
     case "material": {
       const material = lesson.materials.find((m) => m.id === input.materialId);
@@ -565,12 +570,19 @@ function buildBlock(
           "Attach the material to this lesson first; the canvas places a material it already has, with its purpose and how to get it another way.",
         );
       }
-      return { id: blockId, kind: "material", materialId: material.id };
+      return { ...at, kind: "material", materialId: material.id };
     }
   }
 }
 
-/** Places a new block at the end of the canvas, or replaces one in place. */
+/**
+ * Places a new element at the end of its section, or replaces one in place.
+ *
+ * Moving an element to a different section re-places it at the end of that
+ * section rather than leaving it wherever its old index happens to fall in the
+ * new one. Landing in the middle of a stage a person did not choose is the kind
+ * of surprise that makes an author stop trusting the canvas.
+ */
 export function saveLessonBlock(
   actor: User,
   input: BlockInput,
@@ -587,9 +599,16 @@ export function saveLessonBlock(
         const blockId = input.blockId ?? nextId("ab");
         const block = buildBlock(lesson, blockId, input);
         const existingAt = lesson.blocks.findIndex((b) => b.id === blockId);
+        const previousSection =
+          existingAt >= 0 ? lesson.blocks[existingAt].section : null;
+        const moved = previousSection !== null && previousSection !== block.section;
 
-        if (existingAt >= 0) lesson.blocks[existingAt] = block;
-        else lesson.blocks.push(block);
+        if (existingAt < 0 || moved) {
+          lesson.blocks = lesson.blocks.filter((b) => b.id !== blockId);
+          lesson.blocks.push(block);
+        } else {
+          lesson.blocks[existingAt] = block;
+        }
         lesson.updatedAt = nextTimestamp();
         lesson.updatedByUserId = actor.id;
 
@@ -598,8 +617,16 @@ export function saveLessonBlock(
           action: existingAt >= 0 ? "curriculum.block_changed" : "curriculum.block_added",
           targetEntity: "authored_lesson",
           targetId: lesson.id,
-          before: existingAt >= 0 ? { blockId, position: existingAt } : { blocks: lesson.blocks.length - 1 },
-          after: { blockId, kind: block.kind, blocks: lesson.blocks.length },
+          before:
+            existingAt >= 0
+              ? { blockId, position: existingAt, section: previousSection }
+              : { blocks: lesson.blocks.length - 1 },
+          after: {
+            blockId,
+            kind: block.kind,
+            section: block.section,
+            blocks: lesson.blocks.length,
+          },
           reason,
           idempotencyKey,
           requestId: requestIdFor("curriculum.block_saved", idempotencyKey),
@@ -616,7 +643,13 @@ export function saveLessonBlock(
   );
 }
 
-/** Moves a block one position up or down. Order is the lesson's own reading order. */
+/**
+ * Moves an element one position up or down WITHIN its own section.
+ *
+ * The neighbour is the nearest block in the same section, not the adjacent
+ * array index — otherwise a single arrow press would silently reorder two
+ * different stages against each other.
+ */
 export function moveLessonBlock(
   actor: User,
   input: { versionId: string; lessonCode: string; blockId: string; direction: "up" | "down"; reason: string },
@@ -633,9 +666,28 @@ export function moveLessonBlock(
 
         const at = lesson.blocks.findIndex((b) => b.id === input.blockId);
         if (at < 0) throw new LessonAuthoringError("That block is not on this lesson.");
-        const to = input.direction === "up" ? at - 1 : at + 1;
-        if (to < 0 || to >= lesson.blocks.length) {
-          throw new LessonAuthoringError("That block is already at the end of the canvas.");
+        const section = lesson.blocks[at].section;
+
+        let to = -1;
+        if (input.direction === "up") {
+          for (let i = at - 1; i >= 0; i -= 1) {
+            if (lesson.blocks[i].section === section) {
+              to = i;
+              break;
+            }
+          }
+        } else {
+          for (let i = at + 1; i < lesson.blocks.length; i += 1) {
+            if (lesson.blocks[i].section === section) {
+              to = i;
+              break;
+            }
+          }
+        }
+        if (to < 0) {
+          throw new LessonAuthoringError(
+            `That element is already ${input.direction === "up" ? "first" : "last"} in ${LESSON_SECTION_PART[section].label}.`,
+          );
         }
 
         const moved = lesson.blocks[at];
@@ -649,8 +701,8 @@ export function moveLessonBlock(
           action: "curriculum.block_moved",
           targetEntity: "authored_lesson",
           targetId: lesson.id,
-          before: { blockId: input.blockId, position: at },
-          after: { blockId: input.blockId, position: to },
+          before: { blockId: input.blockId, position: at, section },
+          after: { blockId: input.blockId, position: to, section },
           reason,
           idempotencyKey,
           requestId: requestIdFor("curriculum.block_moved", idempotencyKey),
@@ -692,7 +744,7 @@ export function removeLessonBlock(
           action: "curriculum.block_removed",
           targetEntity: "authored_lesson",
           targetId: lesson.id,
-          before: { blockId: block.id, kind: block.kind },
+          before: { blockId: block.id, kind: block.kind, section: block.section },
           after: { blocks: lesson.blocks.length },
           reason,
           idempotencyKey,
@@ -1308,6 +1360,154 @@ export function createDraftVersion(
         const version = db().courseVersions.find((v) => v.id === existingId);
         if (!version) throw new LessonAuthoringError("Duplicate write with no record.");
         return version;
+      },
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Narrow appends
+// ---------------------------------------------------------------------------
+//
+// `saveLessonScript` replaces the whole script, which is what a form editing
+// the whole script should do. These two add to one part of it instead.
+//
+// They exist because accepting a proposal is an addition, not a replacement: a
+// designer who accepts one more worked example has not decided anything about
+// the other six, and a save that carried the whole script would let a stale
+// browser tab quietly revert them. Nothing about these is assistant-specific —
+// they are ordinary authoring writes with the ordinary rules, and a person
+// typing an eighth example by hand goes through the same path.
+
+/** Adds worked-model steps to the end of the lesson's worked model. */
+export function appendWorkedModel(
+  actor: User,
+  input: {
+    versionId: string;
+    lessonCode: string;
+    steps: { step: string; reasoning: string }[];
+    reason: string;
+  },
+  idempotencyKey: string,
+): AuthoredLesson {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = upsertDraft(version, input.lessonCode, actor);
+
+        const steps = input.steps
+          .map((s) => ({ step: s.step.trim(), reasoning: s.reasoning.trim() }))
+          .filter((s) => s.step && s.reasoning);
+        if (steps.length === 0) {
+          throw new LessonAuthoringError(
+            "A worked model step needs both the step and the reasoning behind it.",
+          );
+        }
+        if (lesson.workedModel.length + steps.length > 16) {
+          throw new LessonAuthoringError(
+            "A lesson's worked model holds at most sixteen steps. Remove some before adding more.",
+          );
+        }
+
+        const before = lesson.workedModel.length;
+        lesson.workedModel.push(...steps);
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: "curriculum.worked_model_appended",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: { steps: before },
+          after: {
+            steps: lesson.workedModel.length,
+            added: steps.length,
+            courseVersionId: version.id,
+            lessonCode: lesson.lessonCode,
+          },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.worked_model_appended", idempotencyKey),
+        });
+        return lesson;
+      },
+      (existingId) => {
+        const lesson = db().authoredLessons.find((l) => l.id === existingId);
+        if (!lesson) throw new LessonAuthoringError("Duplicate write with no record.");
+        return lesson;
+      },
+    ),
+  );
+}
+
+/** Adds practice items to the end of the lesson's guided practice. */
+export function appendGuidedPractice(
+  actor: User,
+  input: {
+    versionId: string;
+    lessonCode: string;
+    items: { prompt: string; hint: string; answer: string }[];
+    reason: string;
+  },
+  idempotencyKey: string,
+): AuthoredLesson {
+  return transact(() =>
+    withIdempotency(
+      idempotencyKey,
+      () => {
+        const version = assertEditable(actor, input.versionId);
+        const reason = requireReason(input.reason);
+        const lesson = upsertDraft(version, input.lessonCode, actor);
+
+        const items = input.items
+          .map((g) => ({
+            prompt: g.prompt.trim(),
+            hint: g.hint.trim(),
+            answer: g.answer.trim(),
+          }))
+          .filter((g) => g.prompt && g.answer);
+        if (items.length === 0) {
+          throw new LessonAuthoringError(
+            "A practice item needs a prompt and an answer.",
+          );
+        }
+        if (lesson.guidedPractice.length + items.length > 16) {
+          throw new LessonAuthoringError(
+            "A lesson holds at most sixteen guided practice items. Remove some before adding more.",
+          );
+        }
+
+        const before = lesson.guidedPractice.length;
+        lesson.guidedPractice.push(...items);
+        lesson.updatedAt = nextTimestamp();
+        lesson.updatedByUserId = actor.id;
+
+        recordAudit({
+          actor,
+          action: "curriculum.guided_practice_appended",
+          targetEntity: "authored_lesson",
+          targetId: lesson.id,
+          before: { items: before },
+          after: {
+            items: lesson.guidedPractice.length,
+            added: items.length,
+            courseVersionId: version.id,
+            lessonCode: lesson.lessonCode,
+          },
+          reason,
+          idempotencyKey,
+          requestId: requestIdFor("curriculum.guided_practice_appended", idempotencyKey),
+        });
+        return lesson;
+      },
+      (existingId) => {
+        const lesson = db().authoredLessons.find((l) => l.id === existingId);
+        if (!lesson) throw new LessonAuthoringError("Duplicate write with no record.");
+        return lesson;
       },
     ),
   );

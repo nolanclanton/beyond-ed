@@ -1,0 +1,34 @@
+-- ai_capability_settings
+--
+-- Which design-assistance capabilities one organization has turned on. The
+-- registry in `lib/ai/capabilities.ts` says what CAN exist; this says what is
+-- allowed here.
+--
+-- POSITIVE: anyone holding curriculum authoring READS these. An author who
+--           finds a control missing from their panel deserves to see that
+--           somebody turned it off and why, rather than being told to ask an
+--           administrator. A curriculum administrator WRITES them, for their own
+--           organization, recording themselves as the person who decided.
+-- NEGATIVE: a curriculum author cannot write one, however senior their role. An
+--           organization administrator without the `administrator` curriculum
+--           grant cannot write one either — the grant is what is checked, not
+--           the role (CLAUDE.md §3). A teacher without curriculum authoring
+--           cannot read the table at all, and neither can a student.
+--
+-- Two properties make this safe to expose as a page:
+--
+--   - **A row cannot invent a capability.** `setCapabilityEnabled` refuses any
+--     name that is not already a key of the registry, and
+--     `prohibited_actions_are_not_settings` refuses the dangerous names a second
+--     time at the database. Turning something "on" here can only restore
+--     something the code already implements.
+--   - **Absence is meaningful.** No row means the shipped default, so a newly
+--     released capability arrives available rather than silently off, and an
+--     organization that has never opened the page behaves sensibly.
+--
+-- The unique constraint on (org_id, capability) is doing real work: two rows
+-- would be two answers to the same question, and whichever came back first
+-- would win.
+--
+-- The policy statements live in
+-- `supabase/migrations/0025_ai_capability_settings.sql`.

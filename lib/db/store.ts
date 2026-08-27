@@ -19,6 +19,8 @@
  * silently reset a review session.
  */
 import type {
+  AiCapabilitySetting,
+  AiGeneration,
   AuditEvent,
   AuthoredLesson,
   CourseStructure,
@@ -31,6 +33,9 @@ import type {
   GradebookConfig,
   Intervention,
   LessonState,
+  Narrative,
+  NarrativeAsset,
+  NarrativeVersion,
   Organization,
   RosterSection,
   Site,
@@ -47,6 +52,24 @@ export type Database = {
   authoredLessons: AuthoredLesson[];
   /** Sequence and foundation overrides, one row per course version (§7). */
   courseStructures: CourseStructure[];
+  /** Story worlds units are taught inside. Reusable, duplicated never shared. */
+  narratives: Narrative[];
+  /** Deliberate narrative checkpoints, not autosaves. */
+  narrativeVersions: NarrativeVersion[];
+  /** Artwork and documents, candidates included. Only accepted ones render. */
+  narrativeAssets: NarrativeAsset[];
+  /**
+   * One row per bounded assistant operation (CLAUDE.md §10.2). Not append-only
+   * in the evidence sense: a row is written when a person asks and RESOLVED
+   * when the same person accepts, edits, or rejects. It is a record of a
+   * proposal's fate, and the fate is the point.
+   */
+  aiGenerations: AiGeneration[];
+  /**
+   * Per-organization capability decisions. Absence means "whatever the registry
+   * defaults to", so a new capability arrives on without anybody enabling it.
+   */
+  aiCapabilitySettings: AiCapabilitySetting[];
   sections: RosterSection[];
   enrollments: Enrollment[];
   lessonStates: LessonState[];
@@ -88,6 +111,11 @@ function emptyDatabase(): Database {
     courseVersions: [],
     authoredLessons: [],
     courseStructures: [],
+    narratives: [],
+    narrativeVersions: [],
+    narrativeAssets: [],
+    aiGenerations: [],
+    aiCapabilitySettings: [],
     sections: [],
     enrollments: [],
     lessonStates: [],
@@ -125,6 +153,11 @@ export function db(): Database {
   // array; a fresh process gets it from `emptyDatabase` either way.
   if (!store.authoredLessons) store.authoredLessons = [];
   if (!store.courseStructures) store.courseStructures = [];
+  if (!store.narratives) store.narratives = [];
+  if (!store.narrativeVersions) store.narrativeVersions = [];
+  if (!store.narrativeAssets) store.narrativeAssets = [];
+  if (!store.aiGenerations) store.aiGenerations = [];
+  if (!store.aiCapabilitySettings) store.aiCapabilitySettings = [];
   return store;
 }
 
@@ -193,6 +226,60 @@ export function appendGradeRecord(record: GradeRecord): GradeRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Deep copies
+// ---------------------------------------------------------------------------
+
+/**
+ * A narrative, copied all the way down.
+ *
+ * Used by `transact` so a rolled-back edit cannot survive inside a nested
+ * array, and by narrative duplication so the copy shares no object with its
+ * source (vision §17). Both callers need exactly this, and one of them being
+ * wrong would be a silent data-sharing bug, so there is one function.
+ */
+export function cloneNarrative(n: Narrative): Narrative {
+  return {
+    ...n,
+    unitIds: [...n.unitIds],
+    world: {
+      ...n.world,
+      worldRules: [...n.world.worldRules],
+      constraints: [...n.world.constraints],
+      locations: n.world.locations.map((l) => ({ ...l })),
+    },
+    characters: n.characters.map((c) => ({ ...c })),
+    centralProblem: { ...n.centralProblem },
+    storyArc: n.storyArc.map((m) => ({ ...m })),
+    chapters: n.chapters.map((c) => ({
+      ...c,
+      beats: c.beats.map((b) => ({ ...b })),
+    })),
+    state: {
+      ...n.state,
+      happened: [...n.state.happened],
+      studentsKnow: [...n.state.studentsKnow],
+      cluesRevealed: [...n.state.cluesRevealed],
+      futureReveals: [...n.state.futureReveals],
+    },
+    plotThreads: n.plotThreads.map((t) => ({ ...t })),
+    visualBible: {
+      ...n.visualBible,
+      recurringProps: [...n.visualBible.recurringProps],
+      motifs: [...n.visualBible.motifs],
+      symbols: [...n.visualBible.symbols],
+      accessibilityRules: [...n.visualBible.accessibilityRules],
+    },
+    boundaries: {
+      mustStayConsistent: [...n.boundaries.mustStayConsistent],
+      avoid: [...n.boundaries.avoid],
+      requiredFraming: [...n.boundaries.requiredFraming],
+    },
+    keywords: [...n.keywords],
+    sharedWithUserIds: [...n.sharedWithUserIds],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------
 
@@ -240,6 +327,20 @@ export function transact<T>(fn: () => T): T {
       unitFraming: r.unitFraming.map((u) => ({ ...u })),
       foundationEdits: r.foundationEdits.map((f) => ({ ...f })),
     })),
+    // Same reason again: a narrative is one record with nested arrays that are
+    // mutated in place, so a shallow row copy would let a rolled-back edit
+    // survive inside `characters` or `chapters`.
+    narratives: d.narratives.map(cloneNarrative),
+    narrativeVersions: d.narrativeVersions.map((r) => ({
+      ...r,
+      snapshot: cloneNarrative(r.snapshot),
+    })),
+    narrativeAssets: d.narrativeAssets.map((r) => ({ ...r })),
+    aiGenerations: d.aiGenerations.map((r) => ({
+      ...r,
+      contextKeys: [...r.contextKeys],
+    })),
+    aiCapabilitySettings: d.aiCapabilitySettings.map((r) => ({ ...r })),
     sections: d.sections.map((r) => ({ ...r })),
     enrollments: d.enrollments.map((r) => ({ ...r })),
     lessonStates: d.lessonStates.map((r) => ({ ...r })),

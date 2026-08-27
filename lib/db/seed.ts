@@ -42,6 +42,7 @@ import { appendAudit, appendGradeRecord, db, nextId } from "./store";
 import { recordEvidence } from "@/lib/evidence/ledger";
 import type {
   CourseVersion,
+  CurriculumGrant,
   Enrollment,
   Intervention,
   RosterSection,
@@ -178,15 +179,18 @@ const SEED_STUDENTS: SeedStudent[] = [
 ];
 
 const SEED_STAFF = [
-  { key: "alvarez", first: "Renata", last: "Alvarez", role: "teacher" as const, site: "ORO" as const, subjects: ["Mathematics"], curriculumAuthor: true },
-  { key: "adjei", first: "Kwame", last: "Adjei", role: "teacher" as const, site: "ORO" as const, subjects: ["English Language Arts", "History-Social Science"], curriculumAuthor: false },
-  { key: "delacroix", first: "Hana", last: "Delacroix", role: "teacher" as const, site: "ORO" as const, subjects: ["Science"], curriculumAuthor: false },
-  { key: "thornbury", first: "Elias", last: "Thornbury", role: "teacher" as const, site: "MESA" as const, subjects: ["Mathematics", "Science"], curriculumAuthor: false },
-  { key: "farouk", first: "Nadia", last: "Farouk", role: "teacher" as const, site: "MESA" as const, subjects: ["English Language Arts", "History-Social Science"], curriculumAuthor: false },
-  { key: "salinas", first: "Victor", last: "Salinas", role: "site_admin" as const, site: "ORO" as const, subjects: [], curriculumAuthor: false },
-  { key: "petrova", first: "Ingrid", last: "Petrova", role: "site_admin" as const, site: "MESA" as const, subjects: [], curriculumAuthor: false },
-  { key: "okonjo", first: "Camille", last: "Okonjo", role: "org_admin" as const, site: null, subjects: [], curriculumAuthor: false },
-  { key: "haddad", first: "Yusra", last: "Haddad", role: "curriculum_author" as const, site: null, subjects: [], curriculumAuthor: true },
+  // The vision's "Teacher Author": builds curriculum without any administrative
+  // access. She holds `author` and nothing more, so she can draft and submit
+  // but cannot approve, publish, or change what the assistant may do.
+  { key: "alvarez", first: "Renata", last: "Alvarez", role: "teacher" as const, site: "ORO" as const, subjects: ["Mathematics"], curriculumAuthor: true, curriculumGrants: ["author"] as CurriculumGrant[] },
+  { key: "adjei", first: "Kwame", last: "Adjei", role: "teacher" as const, site: "ORO" as const, subjects: ["English Language Arts", "History-Social Science"], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "delacroix", first: "Hana", last: "Delacroix", role: "teacher" as const, site: "ORO" as const, subjects: ["Science"], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "thornbury", first: "Elias", last: "Thornbury", role: "teacher" as const, site: "MESA" as const, subjects: ["Mathematics", "Science"], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "farouk", first: "Nadia", last: "Farouk", role: "teacher" as const, site: "MESA" as const, subjects: ["English Language Arts", "History-Social Science"], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "salinas", first: "Victor", last: "Salinas", role: "site_admin" as const, site: "ORO" as const, subjects: [], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "petrova", first: "Ingrid", last: "Petrova", role: "site_admin" as const, site: "MESA" as const, subjects: [], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "okonjo", first: "Camille", last: "Okonjo", role: "org_admin" as const, site: null, subjects: [], curriculumAuthor: false, curriculumGrants: [] as CurriculumGrant[] },
+  { key: "haddad", first: "Yusra", last: "Haddad", role: "curriculum_author" as const, site: null, subjects: [], curriculumAuthor: true, curriculumGrants: ["author", "reviewer", "administrator"] as CurriculumGrant[] },
 ];
 
 /**
@@ -303,6 +307,7 @@ export function ensureSeeded(): void {
       lastName: s.last,
       role: s.role,
       curriculumAuthor: s.curriculumAuthor,
+      curriculumGrants: s.curriculumGrants,
       gradeLevel: null,
     };
     d.users.push(user);
@@ -459,6 +464,277 @@ export function ensureSeeded(): void {
   seedDistrictPopulation(orgId, sectionsByKey, publishedVersionFor);
   seedInterventions(staffById, studentUsers);
   seedMessages(staffById, studentUsers);
+  seedNarrative(orgId, staffById);
+}
+
+/**
+ * One demonstration narrative, so the Narrative Bank and the Studio have
+ * something in them on a fresh boot.
+ *
+ * Deliberately a single, complete one rather than a shelf of thin ones: the
+ * point of the bank is that a designer can read a narrative, judge whether it
+ * is worth building on, and duplicate it — and none of that can be judged from
+ * a stub. It carries a beat on `MATH-06-L035`, which is the lesson the studio's
+ * own demonstration content is written against, so the lesson workshop's
+ * narrative transition has something real to show.
+ *
+ * Written by the curriculum lead and shared with the mathematics teacher who
+ * holds `author`, which is the vision's "Teacher Author" working alongside a
+ * designer rather than under one.
+ */
+function seedNarrative(orgId: string, staff: Map<string, User>): void {
+  const d = db();
+  const lead = staff.get("haddad") as User;
+  const teacherAuthor = staff.get("alvarez") as User;
+  const now = currentTimestamp();
+
+  const chapterOne = nextId("cha");
+  const chapterTwo = nextId("cha");
+
+  d.narratives.push({
+    id: nextId("nar"),
+    orgId,
+    status: "draft",
+    official: false,
+    title: "The Signal in the Water",
+    premise:
+      "A town's water readings stop agreeing with each other, and only proportional reasoning can say which set is impossible.",
+    subject: "Mathematics",
+    courseId: "MATH-06",
+    unitIds: [],
+    genre: "Investigation",
+    tone: "Urgent but never frightening. Nobody is in danger; the town is.",
+    gradeBand: "6",
+    audience: "Sixth graders who have met ratios but not rates",
+    world: {
+      place: "Ashfield, a river town of about nine thousand people",
+      period: "The present day",
+      technologyLevel:
+        "Ordinary municipal equipment. Clipboards and a decade-old sensor network.",
+      worldRules: [
+        "Every measurement in this world is real and checkable. Nothing is solved by a hunch.",
+        "Adults are competent and busy. They need the student because they are stretched, not because they are foolish.",
+        "No mystery is resolved by an authority figure simply announcing the answer.",
+      ],
+      constraints: [
+        "No contaminated-water imagery, and nobody falls ill.",
+        "The municipal politics stay procedural: a council vote, not a conspiracy.",
+      ],
+      locations: [
+        {
+          id: nextId("loc"),
+          name: "The Ashfield pump house",
+          description:
+            "A low brick building beside the weir, louder inside than anyone expects. Two banks of gauges, one of them thirty years newer than the other.",
+          significance:
+            "Where the two disagreeing logs are kept, and where the student first sees both.",
+          visualReference:
+            "Overcast daylight through high windows. Wet concrete, painted steel, one warm sodium lamp over the desk.",
+        },
+        {
+          id: nextId("loc"),
+          name: "The council annexe",
+          description:
+            "A meeting room with a laminated map of the water network and chairs for more people than ever attend.",
+          significance: "Where the findings have to hold up in front of people who can act.",
+          visualReference: "Fluorescent, flat, municipal. The map is the only colour.",
+        },
+      ],
+    },
+    characters: [
+      {
+        id: nextId("chr"),
+        name: "Dr Imani Osei",
+        role: "Municipal hydrologist",
+        personality: "Precise, warm in private, impatient with guesswork.",
+        motivation:
+          "Find out which log is wrong before the council votes on a replacement network she thinks is unnecessary.",
+        relationships:
+          "Trusts the student's arithmetic more than she trusts the contractor's summary. Went to school with the council chair.",
+        appearance:
+          "Tall, close-cropped grey hair, a field jacket that has been rained on many times.",
+        knows:
+          "That the two logs disagree, and that both cannot be right. Not yet why, and not yet who filed the second one.",
+        arc: "From certainty, through doubt, to a better-founded certainty she can defend in public.",
+        assetId: null,
+      },
+      {
+        id: nextId("chr"),
+        name: "Petra Vance",
+        role: "Contractor's site engineer",
+        personality: "Genial, quick, allergic to being slowed down.",
+        motivation: "Get the replacement network signed off before the quarter closes.",
+        relationships: "Cordial with Dr Osei and quietly dismissive of her objections.",
+        appearance: "Hi-vis over a good coat. Always holding a tablet.",
+        knows:
+          "That her firm's sensors report in different units from the old ones. She has not thought about it hard.",
+        arc: "From dismissal to genuine alarm, and then to being useful.",
+        assetId: null,
+      },
+    ],
+    centralProblem: {
+      challenge:
+        "Two sets of water-flow readings for the same week disagree by a factor nobody has pinned down.",
+      stakes:
+        "The council votes in three weeks on replacing a network that may not need replacing.",
+      objective:
+        "Work out which readings are impossible, and be able to show why to people who are not mathematicians.",
+      studentRole:
+        "Dr Osei has the readings and no time. The student has the time and is learning exactly the reasoning the readings need.",
+    },
+    storyArc: [
+      {
+        id: nextId("arc"),
+        stage: "opening",
+        summary: "Dr Osei shows the student two logs of the same week that cannot both be true.",
+      },
+      {
+        id: nextId("arc"),
+        stage: "rising_action",
+        summary:
+          "Each lesson's reasoning eliminates one explanation, and the remaining ones get harder.",
+      },
+      {
+        id: nextId("arc"),
+        stage: "turning_point",
+        summary:
+          "The second log turns out to be in different units — which is a smaller problem and a worse one.",
+      },
+      {
+        id: nextId("arc"),
+        stage: "resolution",
+        summary:
+          "The student's own comparison is what the council actually reads, in the student's own words.",
+      },
+    ],
+    chapters: [
+      {
+        id: chapterOne,
+        title: "Chapter One: Two Logs, One Week",
+        summary: "The anomaly is found, and the shape of the problem becomes clear.",
+        unitId: null,
+        beats: [
+          {
+            id: nextId("bea"),
+            lessonCode: "MATH-06-L035",
+            academicObjective: "Find and use a unit rate.",
+            narrativeEvent:
+              "Dr Osei hands over both logs at the pump house and asks a question she has not had time to answer: per hour, do these two even describe the same river?",
+            learningUnlock:
+              "state each log as a rate per hour and say plainly which one is impossible",
+          },
+        ],
+      },
+      {
+        id: chapterTwo,
+        title: "Chapter Two: The Second Signature",
+        summary: "Who filed the second log, and what were they measuring in?",
+        unitId: null,
+        beats: [],
+      },
+    ],
+    state: {
+      happened: [
+        "The student met Dr Osei at the pump house and saw both logs.",
+        "Both logs cover the same week of the same river.",
+      ],
+      studentsKnow: [
+        "That the two logs disagree.",
+        "That the council votes in three weeks.",
+        "That Petra Vance's firm installed the newer sensors.",
+      ],
+      cluesRevealed: [
+        "A second signature at the foot of the newer log that Dr Osei does not recognise.",
+      ],
+      currentObjective:
+        "Express both logs as a rate per hour and work out which one cannot be right.",
+      futureReveals: [
+        "The newer sensors report in litres per second while the old ones report in cubic metres per hour. Nobody converted.",
+        "The second signature is Petra Vance's, from her first week on site.",
+      ],
+    },
+    plotThreads: [
+      {
+        id: nextId("thr"),
+        kind: "question",
+        summary: "Whose signature is at the foot of the newer log?",
+        openedInChapterId: chapterOne,
+        resolvedInChapterId: null,
+        resolved: false,
+        note: "Planned for chapter two. Do not answer it earlier.",
+      },
+      {
+        id: nextId("thr"),
+        kind: "objective",
+        summary: "Produce something the council will actually read before the vote.",
+        openedInChapterId: chapterOne,
+        resolvedInChapterId: null,
+        resolved: false,
+        note: "The unit's final task.",
+      },
+    ],
+    visualBible: {
+      artDirection:
+        "Documentary realism under overcast light. Municipal, unglamorous, and specific — this is a real town with a real budget.",
+      visualTone: "Cool and factual, never ominous.",
+      palette:
+        "Slate blue, wet concrete grey, painted steel green, and exactly one warm sodium lamp per scene.",
+      interfaceTreatment:
+        "Gauges and printed logs. No glowing screens, no futuristic overlays.",
+      recurringProps: ["Sample vials in a foam tray", "A clipboard with a bulldog clip", "The laminated network map"],
+      motifs: ["The surface of moving water", "Two readings side by side"],
+      symbols: ["The Ashfield town seal — a weir and three fish"],
+      defaultAspectRatio: "16:9",
+      textInImages:
+        "None. Anything a student must read belongs in the lesson, where a screen reader can reach it.",
+      accessibilityRules: [
+        "Every image carries alternative text describing what it shows, not that it is an image.",
+        "Meaning is never carried by colour alone; the two logs are told apart by label, not by hue.",
+      ],
+      ageAppropriateness:
+        "No peril to named characters, no illness, no imagery of contaminated water.",
+    },
+    boundaries: {
+      mustStayConsistent: [
+        "Dr Osei never simply announces the answer. The student's reasoning is what settles it.",
+        "Every number in the story is checkable, and the arithmetic is always doable with what the lesson has taught.",
+        "The town is Ashfield and the river is unnamed.",
+      ],
+      avoid: [
+        "Illness, contamination imagery, or anyone coming to harm.",
+        "Villains. Petra Vance is wrong, not dishonest.",
+        "Resolving the unit with a coincidence.",
+      ],
+      requiredFraming: [
+        "Adults are competent and stretched, never foolish.",
+        "The mathematics is what makes the student useful, not a hunch or a lucky guess.",
+      ],
+    },
+    keywords: ["water", "investigation", "rates", "civic", "measurement"],
+    basedOnNarrativeId: null,
+    reuseCount: 0,
+    ownerUserId: lead.id,
+    sharedWithUserIds: [teacherAuthor.id],
+    createdAt: now,
+    updatedAt: now,
+    updatedByUserId: lead.id,
+  });
+
+  appendAudit({
+    id: nextId("aud"),
+    actorUserId: lead.id,
+    actorRole: lead.role,
+    scope: `org:${orgId}`,
+    action: "narrative.create",
+    targetEntity: "narrative",
+    targetId: d.narratives[d.narratives.length - 1].id,
+    before: null,
+    after: JSON.stringify({ title: "The Signal in the Water", status: "draft" }),
+    reason: SEED_REASON,
+    idempotencyKey: `seed:narrative:${orgId}`,
+    requestId: `seed:narrative:${orgId}`,
+    recordedAt: now,
+  });
 }
 
 /**

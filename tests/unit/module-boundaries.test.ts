@@ -87,8 +87,8 @@ describe("the recommendation engine is pure (CLAUDE.md §8)", () => {
   });
 });
 
-describe("no AI, LLM, or conversational surface (CLAUDE.md §10)", () => {
-  const FORBIDDEN_PACKAGES = [
+describe("no AI in the learning product (CLAUDE.md §10)", () => {
+  const LLM_PACKAGES = [
     "openai",
     "@anthropic-ai/",
     "@google/generative-ai",
@@ -100,7 +100,29 @@ describe("no AI, LLM, or conversational surface (CLAUDE.md §10)", () => {
     "ollama",
   ];
 
-  it("declares no AI or LLM dependency", () => {
+  /** The one directory §10.2 lifts the ban for. */
+  const AI_DIR = "lib/ai/";
+
+  /**
+   * Surfaces a student, a teacher, or a site administrator actually reaches.
+   * Nothing generative may run in any of them, and none of them may so much as
+   * import the module that can.
+   */
+  const LEARNER_SURFACES = [
+    "app/(student)",
+    "app/(teacher)",
+    "app/(site)",
+    "lib/grades",
+    "lib/mastery",
+    "lib/recommend",
+    "lib/evidence",
+    "lib/intervention",
+    "lib/learning",
+    "lib/views",
+    "lib/audit",
+  ];
+
+  it("declares exactly one AI dependency, and it is the approved one", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -110,35 +132,110 @@ describe("no AI, LLM, or conversational surface (CLAUDE.md §10)", () => {
       ...Object.keys(pkg.devDependencies ?? {}),
     ];
     for (const name of names) {
-      for (const forbidden of FORBIDDEN_PACKAGES) {
-        expect(name.startsWith(forbidden), `${name} is an AI/LLM SDK`).toBe(false);
+      for (const forbidden of LLM_PACKAGES) {
+        if (forbidden === "@google/genai") continue;
+        expect(name.startsWith(forbidden), `${name} is a forbidden AI/LLM SDK`).toBe(
+          false,
+        );
       }
     }
   });
 
-  it("imports no AI or LLM SDK anywhere", () => {
+  it("imports an LLM SDK nowhere but /lib/ai", () => {
     for (const file of ALL_SOURCE) {
+      if (file.startsWith(AI_DIR)) continue;
       const imports = importLines(readFileSync(file, "utf8"));
-      for (const forbidden of FORBIDDEN_PACKAGES) {
-        expect(imports.includes(`"${forbidden}`), `${file} imports ${forbidden}`).toBe(false);
+      for (const forbidden of LLM_PACKAGES) {
+        expect(
+          imports.includes(`"${forbidden}`),
+          `${file} imports ${forbidden} outside /lib/ai`,
+        ).toBe(false);
       }
     }
   });
 
-  it("ships no chatbot, tutor, or assistant surface", () => {
+  it("keeps the assistant away from student records", () => {
+    for (const file of filesUnder("lib/ai")) {
+      const imports = importLines(readFileSync(file, "utf8"));
+      for (const banned of [
+        "lib/grades",
+        "lib/mastery",
+        "lib/evidence",
+        "lib/recommend",
+        "lib/intervention",
+        "lib/views",
+        "lib/learning",
+      ]) {
+        expect(imports, `${file} imports ${banned}`).not.toMatch(
+          new RegExp(banned.replace("/", "\\/")),
+        );
+      }
+    }
+  });
+
+  it("is not reachable from any learner, teacher, or site surface", () => {
+    for (const dir of LEARNER_SURFACES) {
+      for (const file of filesUnder(dir)) {
+        const imports = importLines(readFileSync(file, "utf8"));
+        expect(imports, `${file} imports the assistant`).not.toMatch(/lib\/ai\//);
+      }
+    }
+  });
+
+  it("never puts the Gemini key within reach of a browser", () => {
+    for (const file of ALL_SOURCE) {
+      // This file necessarily spells out the strings it forbids.
+      if (file.endsWith("module-boundaries.test.ts")) continue;
+      const source = readFileSync(file, "utf8");
+      expect(source, `${file} names a public Gemini variable`).not.toMatch(
+        /NEXT_PUBLIC_GEMINI/,
+      );
+      // A literal Google API key, in any file, is a credential to rotate.
+      expect(source, `${file} contains a literal Google API key`).not.toMatch(
+        /["']AIza[0-9A-Za-z\-_]{30,}["']/,
+      );
+      // The variable itself: shipped code outside /lib/ai must never read it.
+      // A test may set it to a fake value — that is how the unconfigured and
+      // configured paths get exercised at all, and the assistance tests assert
+      // the fake never reaches the model.
+      if (file.startsWith(AI_DIR) || file.startsWith("tests/")) continue;
+      expect(source, `${file} reads GEMINI_API_KEY outside /lib/ai`).not.toMatch(
+        /GEMINI_API_KEY/,
+      );
+    }
+  });
+
+  it("refuses to construct the Gemini client anywhere but the server", () => {
+    const source = readFileSync("lib/ai/client.ts", "utf8");
+    expect(source, "lib/ai/client.ts has no browser guard").toMatch(
+      /typeof window/,
+    );
+  });
+
+  it("is never imported by a Client Component", () => {
+    for (const file of ALL_SOURCE) {
+      const source = readFileSync(file, "utf8");
+      if (!/^\s*["']use client["']/m.test(source)) continue;
+      expect(
+        importLines(source),
+        `${file} is a Client Component and imports the assistant`,
+      ).not.toMatch(/lib\/ai\//);
+    }
+  });
+
+  it("ships no chatbot, tutor, or assistant surface to a student or a teacher", () => {
     const banned = [
       /\bAI tutor\b/i,
       /\bchatbot\b/i,
       /\bcopilot\b/i,
       /\bask beyond\.?ed\b/i,
-      /\bAI assistant\b/i,
+      /\bAI agent\b/i,
     ];
     for (const file of filesUnder("app")) {
       const source = readFileSync(file, "utf8");
       for (const pattern of banned) {
         const matches = source.match(new RegExp(pattern, "gi")) ?? [];
         for (const match of matches) {
-          // The only permitted mentions are the standing denials.
           const line =
             source
               .split("\n")
@@ -150,6 +247,23 @@ describe("no AI, LLM, or conversational surface (CLAUDE.md §10)", () => {
             `${file}: "${line.trim()}"`,
           ).toBe(true);
         }
+      }
+    }
+  });
+
+  it("mentions design assistance only on the curriculum authoring screens", () => {
+    for (const file of filesUnder("app")) {
+      if (file.startsWith("app/(org)/org/curriculum")) continue;
+      const source = readFileSync(file, "utf8");
+      for (const match of source.match(/\bGemini\b|\bAI assistance\b/gi) ?? []) {
+        const line =
+          source
+            .split("\n")
+            .find((l) => l.toLowerCase().includes(match.toLowerCase())) ?? "";
+        expect(
+          /\b(no|not|never|without|forbidden|prohibited)\b/i.test(line),
+          `${file}: "${line.trim()}"`,
+        ).toBe(true);
       }
     }
   });

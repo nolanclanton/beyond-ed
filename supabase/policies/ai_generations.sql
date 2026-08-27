@@ -1,0 +1,43 @@
+-- ai_generations
+--
+-- One row per bounded design-assistance operation (CLAUDE.md §10.2). Written
+-- when a person asks, and resolved when the SAME person accepts, edits,
+-- acknowledges, or rejects the proposal.
+--
+-- POSITIVE: the person who made the request reads their own records. A
+--           curriculum reviewer reads them, because inspecting what the
+--           assistant contributed to work under review is the point of having
+--           the record. An organization administrator reads them, as they read
+--           the audit log.
+-- NEGATIVE: a student never reads one. A teacher without curriculum authoring
+--           never reads one. A curriculum author cannot read a colleague's
+--           requests unless they hold the reviewer grant — what somebody asked
+--           for while drafting is theirs until it becomes curriculum. Nobody
+--           inserts a record on somebody else's behalf, and nobody resolves
+--           somebody else's proposal: deciding what to do with a suggestion is
+--           the job of the person who asked for it.
+--
+-- Three constraints carry the guarantees this table exists for:
+--
+--   - `ai_generations_insert_own` refuses any row that does not arrive as
+--     `proposed` with no resulting audit event. A generation cannot be born
+--     already accepted.
+--   - `ai_generations_decided_once` raises when a decided record's status
+--     changes again, or when it changes hands. "Accepted" cannot become
+--     "rejected" after the content was written, and vice versa.
+--   - `ai_generations_no_delete` reuses `reject_mutation`. A request that was
+--     made was made; a proposal that was turned down is exactly the case worth
+--     keeping, and a table somebody could tidy would not be a record.
+--
+-- What is deliberately NOT in the table, and therefore cannot leak from it: the
+-- assembled context (only the NAMES of the parts), the system instruction
+-- (a constant in source), the model's raw response, and any credential.
+--
+-- Note what this table does NOT grant. It records that a request happened; it
+-- confers no ability to make one. Whether somebody may use design assistance at
+-- all is `is_curriculum_author()` plus the capability registry, checked in
+-- `lib/ai/gateway.ts` before any record is read — and a capability that is not
+-- in the registry is refused before this table is touched.
+--
+-- The policy statements live in
+-- `supabase/migrations/0024_assets_and_ai_generations.sql`.

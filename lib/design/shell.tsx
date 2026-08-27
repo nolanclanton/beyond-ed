@@ -116,7 +116,10 @@ export async function AppShell({
           Beyond.Ed contains no AI tutor, chatbot, copilot, or conversational
           assistant. Individualized review and recommendations use transparent,
           versioned curriculum rules over stored evidence, and every
-          consequential decision is made by a person.
+          consequential decision is made by a person. Curriculum designers may
+          use a constrained design assistant while authoring; nothing it
+          proposes reaches a student until a person accepts it and publishes
+          the version it sits in.
         </div>
       </footer>
     </div>
@@ -149,12 +152,22 @@ export const SITE_NAV: NavItem[] = [
   { label: "Unresolved queue", href: "/site/queue" },
 ];
 
+/**
+ * The Curriculum Design Studio's own navigation, and then the organization's.
+ *
+ * Catalog first, then the two places work happens, then the library, then
+ * governance — which is the order a designer moves through them.
+ */
 export const ORG_NAV: NavItem[] = [
   { label: "Organization", href: "/org" },
   { label: "Courses", href: "/org/curriculum/courses" },
   { label: "Matrix", href: "/org/curriculum/matrix" },
   { label: "Lesson studio", href: "/org/curriculum/build" },
+  { label: "Narrative Bank", href: "/org/curriculum/narrative" },
+  { label: "Assets", href: "/org/curriculum/assets" },
+  { label: "Review queue", href: "/org/curriculum/review" },
   { label: "Versions", href: "/org/curriculum" },
+  { label: "Design assistance", href: "/org/curriculum/ai" },
   { label: "Intervention system", href: "/org/intervention" },
   { label: "Accounts", href: "/org/permissions" },
   { label: "Audit", href: "/org/audit" },

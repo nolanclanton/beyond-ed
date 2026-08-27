@@ -18,7 +18,11 @@ import {
   saveQuizItem,
 } from "@/lib/curriculum/lesson-authoring";
 
-import { LESSON_BLOCK_KINDS, LESSON_MATERIAL_KINDS } from "@/lib/db/types";
+import {
+  LESSON_BLOCK_KINDS,
+  LESSON_MATERIAL_KINDS,
+  LESSON_SECTIONS,
+} from "@/lib/db/types";
 
 import { toFailure, type ActionResult } from "./result";
 
@@ -149,8 +153,10 @@ const Block = z.object({
   versionId: z.string().min(1),
   lessonCode: z.string().min(1),
   blockId: z.string().min(1).nullable(),
-  // Read from the block union's own list rather than repeated here, so adding
-  // a block kind cannot leave this schema quietly rejecting it.
+  // Both read from the union's own lists rather than repeated here, so adding a
+  // block kind or a lesson section cannot leave this schema quietly rejecting
+  // it.
+  section: z.enum(LESSON_SECTIONS),
   kind: z.enum(LESSON_BLOCK_KINDS),
   text: z.string().max(8000),
   title: z.string().max(200),
@@ -183,6 +189,17 @@ const BLOCK_LABEL: Record<string, string> = {
   material: "Material",
 };
 
+/** How each section is named back to the author in a result message. */
+const SECTION_LABEL: Record<string, string> = {
+  notes: "the notes record",
+  relevance: "the introduction",
+  goal: "the goal",
+  instruction: "the instruction stage",
+  worked_model: "the worked model",
+  guided_practice: "guided practice",
+  independent: "the independent task",
+};
+
 /** `a | b | c` per row — one line per row, columns separated by a pipe. */
 function pipeRows(value: FormDataEntryValue | null): string[][] {
   return lines(value).map((line) => line.split("|").map((cell) => cell.trim()));
@@ -198,6 +215,7 @@ export async function saveLessonBlockAction(
       versionId: formData.get("versionId"),
       lessonCode: formData.get("lessonCode"),
       blockId: rawBlockId === "" ? null : rawBlockId,
+      section: formData.get("section"),
       kind: formData.get("kind"),
       text: String(formData.get("text") ?? ""),
       title: String(formData.get("title") ?? ""),
@@ -224,7 +242,7 @@ export async function saveLessonBlockAction(
     revalidatePath("/", "layout");
     return {
       ok: true,
-      message: `${BLOCK_LABEL[block.kind]} ${input.blockId ? "saved" : "placed on the canvas"}.`,
+      message: `${BLOCK_LABEL[block.kind]} ${input.blockId ? "saved" : "added"} in ${SECTION_LABEL[block.section]}.`,
       kind: block.kind,
     };
   } catch (error) {

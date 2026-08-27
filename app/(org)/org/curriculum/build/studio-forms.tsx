@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import {
@@ -16,12 +17,14 @@ import {
   saveQuizItemAction,
 } from "@/lib/actions/lesson-authoring";
 import { MATERIAL_KINDS } from "@/lib/curriculum/lesson-authoring";
+import { LESSON_SECTION_PARTS } from "@/lib/curriculum/lesson-sections";
 import type {
   AuthoredLesson,
   AuthoredQuizItem,
   ItemPurpose,
   LessonBlock,
   LessonMaterial,
+  LessonSection,
   LessonVideo,
 } from "@/lib/db/types";
 import { ActionForm } from "@/lib/design/action-form";
@@ -299,6 +302,8 @@ export function BlockForm({
   videos,
   materials,
   block,
+  section,
+  initialKind,
   seq,
   onDone,
 }: {
@@ -307,17 +312,26 @@ export function BlockForm({
   videos: readonly LessonVideo[];
   materials: readonly LessonMaterial[];
   block?: LessonBlock;
+  /** Where a NEW element lands. An existing one starts in the section it is in. */
+  section?: LessonSection;
+  /** What the insert gallery picked, for a new element. */
+  initialKind?: LessonBlock["kind"];
   seq: number;
   onDone?: () => void;
 }) {
-  const [kind, setKind] = useState<LessonBlock["kind"]>(block?.kind ?? "text");
+  const [kind, setKind] = useState<LessonBlock["kind"]>(
+    block?.kind ?? initialKind ?? "text",
+  );
+  const [placement, setPlacement] = useState<LessonSection>(
+    block?.section ?? section ?? "instruction",
+  );
   const id = (name: string) => `block-${lessonCode}-${block?.id ?? `new${seq}`}-${name}`;
   const editing = Boolean(block);
 
   return (
     <ActionForm
       action={saveLessonBlockAction}
-      idempotencyKey={`lesson-block:${versionId}:${lessonCode}:${block?.id ?? `new:${seq}`}`}
+      idempotencyKey={`lesson-block:${versionId}:${lessonCode}:${block?.id ?? `new:${section ?? "instruction"}:${initialKind ?? "text"}:${seq}`}`}
       onSuccessNote={() => (onDone ? <span>Reopen the canvas to keep building.</span> : null)}
     >
       {(pending) => (
@@ -326,6 +340,30 @@ export function BlockForm({
           <input type="hidden" name="lessonCode" value={lessonCode} />
           <input type="hidden" name="blockId" value={block?.id ?? ""} />
           <input type="hidden" name="kind" value={kind} />
+
+          <Field
+            label="Which part of the lesson"
+            htmlFor={id("section")}
+            hint={
+              editing
+                ? "Changing this moves the element to the end of that part."
+                : "The stage a student meets this in."
+            }
+          >
+            <select
+              id={id("section")}
+              name="section"
+              value={placement}
+              onChange={(e) => setPlacement(e.target.value as LessonSection)}
+              className={FIELD}
+            >
+              {LESSON_SECTION_PARTS.map((part) => (
+                <option key={part.value} value={part.value}>
+                  {part.stage}. {part.label}
+                </option>
+              ))}
+            </select>
+          </Field>
 
           <fieldset>
             <legend className={LABEL}>What are you adding?</legend>
@@ -635,13 +673,17 @@ export function AddBlockPanel({
   lessonCode,
   videos,
   materials,
+  section,
   seq,
+  label = "Add a block",
 }: {
   versionId: string;
   lessonCode: string;
   videos: readonly LessonVideo[];
   materials: readonly LessonMaterial[];
+  section?: LessonSection;
   seq: number;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -652,7 +694,7 @@ export function AddBlockPanel({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        {open ? "Close" : "Add a block"}
+        {open ? "Close" : label}
       </Button>
       {open ? (
         <div className="mt-4 rounded-xl border border-line bg-surface-sunken p-4">
@@ -661,6 +703,7 @@ export function AddBlockPanel({
             lessonCode={lessonCode}
             videos={videos}
             materials={materials}
+            section={section}
             seq={seq}
           />
         </div>
@@ -1497,81 +1540,79 @@ export function NewDraftVersionForm({
   courses: string[];
   suggested: Record<string, string>;
 }) {
-  const [open, setOpen] = useState(false);
   const [course, setCourse] = useState(courses[0] ?? "");
 
   return (
-    <div>
-      <Button
-        type="button"
-        emphasis="primary"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {open ? "Close" : "Open a new draft version"}
-      </Button>
-      {open ? (
-        <ActionForm
-          className="mt-3"
-          action={createDraftVersionAction}
-          idempotencyKey={`new-version:${course}:${suggested[course] ?? ""}`}
-        >
-          {(pending) => (
-            <>
-              <Field label="Course" htmlFor="nv-course">
-                <select
-                  id="nv-course"
-                  name="courseTitle"
-                  value={course}
-                  onChange={(e) => setCourse(e.target.value)}
-                  className={FIELD}
-                >
-                  {courses.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+    <ActionForm
+      action={createDraftVersionAction}
+      idempotencyKey={`new-version:${course}:${suggested[course] ?? ""}`}
+      onSuccessNote={(result) =>
+        result.ok && typeof result.versionId === "string" ? (
+          <p className="mt-2">
+            <Link
+              href={`/org/curriculum/build/${result.versionId}`}
+              className={`font-semibold text-primary underline underline-offset-4 ${FOCUS_RING}`}
+            >
+              Open it and start designing lessons &rarr;
+            </Link>
+          </p>
+        ) : null
+      }
+    >
+      {(pending) => (
+        <>
+          <Field label="Course" htmlFor="nv-course">
+            <select
+              id="nv-course"
+              name="courseTitle"
+              value={course}
+              onChange={(e) => setCourse(e.target.value)}
+              className={FIELD}
+            >
+              {courses.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-              <Field
-                label="Version label"
-                htmlFor="nv-version"
-                hint="The school year, then the revision — 2026.3. Labels are stable once used."
-              >
-                <input
-                  id="nv-version"
-                  name="version"
-                  required
-                  defaultValue={suggested[course] ?? ""}
-                  key={course}
-                  maxLength={20}
-                  className={FIELD}
-                />
-              </Field>
+          <Field
+            label="Version label"
+            htmlFor="nv-version"
+            hint="The school year, then the revision — 2026.3. Labels are stable once used."
+          >
+            <input
+              id="nv-version"
+              name="version"
+              required
+              defaultValue={suggested[course] ?? ""}
+              key={course}
+              maxLength={20}
+              className={FIELD}
+            />
+          </Field>
 
-              <Field
-                label="What is changing in this version"
-                htmlFor="nv-notes"
-                hint="Read by every reviewer who sees it later."
-              >
-                <textarea id="nv-notes" name="notes" rows={3} maxLength={1000} className={FIELD} />
-              </Field>
+          <Field
+            label="What is changing in this version"
+            htmlFor="nv-notes"
+            hint="Read by every reviewer who sees it later."
+          >
+            <textarea id="nv-notes" name="notes" rows={3} maxLength={1000} className={FIELD} />
+          </Field>
 
-              <ReasonField
-                id="nv-reason"
-                placeholder="Opening the 2027 revision to author Unit 1."
-              />
+          <ReasonField
+            id="nv-reason"
+            placeholder="Opening the 2027 revision to author Unit 1."
+          />
 
-              <div>
-                <Button emphasis="primary" disabled={pending}>
-                  {pending ? "Opening…" : "Open draft version"}
-                </Button>
-              </div>
-            </>
-          )}
-        </ActionForm>
-      ) : null}
-    </div>
+          <div>
+            <Button emphasis="primary" disabled={pending}>
+              {pending ? "Opening…" : "Open draft version"}
+            </Button>
+          </div>
+        </>
+      )}
+    </ActionForm>
   );
 }

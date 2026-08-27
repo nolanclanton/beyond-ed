@@ -1,6 +1,12 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { toUser } from "@/lib/auth/profile";
+import {
+  canAdministerCurriculum,
+  canReviewCurriculum,
+  curriculumGrantsOf,
+} from "@/lib/auth/scope";
 
 /**
  * The authentication invariants, checked against the source rather than
@@ -417,5 +423,57 @@ describe("every provisioning write is atomic, audited, and idempotent (CLAUDE.md
     const at = actions.indexOf("function public.set_profile_active");
     const body = actions.slice(at, actions.indexOf("$$;", at));
     expect(body).toMatch(/p_user_id = auth\.uid\(\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Curriculum grants on a real profile (ADR 0016)
+// ---------------------------------------------------------------------------
+
+describe("curriculum grants on a signed-in profile", () => {
+  const row = {
+    id: "u_1",
+    org_id: "org_1",
+    site_id: null,
+    first_name: "Yusra",
+    last_name: "Haddad",
+    role: "curriculum_author" as const,
+    curriculum_author: true,
+    grade_level: null,
+    deactivated_at: null,
+    active_role: null,
+  };
+
+  it("carries the grants through when the column has a value", () => {
+    const user = toUser(row, [], ["author", "reviewer", "administrator"]);
+    expect(user.curriculumGrants).toEqual(["author", "reviewer", "administrator"]);
+    expect(curriculumGrantsOf(user)).toEqual([
+      "author",
+      "reviewer",
+      "administrator",
+    ]);
+  });
+
+  /**
+   * The case that matters on a deploy: this build can ship before migration
+   * 0022 has run, and the grants query is allowed to fail. Falling back to the
+   * access the account already had is the narrower outcome and the safe one.
+   */
+  it("falls back to author when the column is absent", () => {
+    const user = toUser(row, [], undefined);
+    expect(user.curriculumGrants).toBeUndefined();
+    expect(curriculumGrantsOf(user)).toEqual(["author"]);
+    expect(canReviewCurriculum(user)).toBe(false);
+    expect(canAdministerCurriculum(user)).toBe(false);
+  });
+
+  it("gives nothing to somebody who cannot author, whatever the column says", () => {
+    const user = toUser(
+      { ...row, curriculum_author: false, role: "org_admin" as const },
+      [],
+      ["administrator"],
+    );
+    expect(curriculumGrantsOf(user)).toEqual([]);
+    expect(canAdministerCurriculum(user)).toBe(false);
   });
 });

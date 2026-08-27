@@ -68,7 +68,7 @@ export function asLessonContent(lesson: AuthoredLesson): LessonContent {
     relevance: lesson.relevance,
     goal: lesson.goal,
     successCriteria: lesson.successCriteria,
-    instruction: lesson.blocks,
+    blocks: lesson.blocks,
     vocabulary: lesson.vocabulary,
     workedModel: lesson.workedModel,
     guidedPractice: lesson.guidedPractice,

@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  assertCanAdministerCurriculum,
   assertCanReadStudent,
+  assertCanReviewCurriculum,
+  canAdministerCurriculum,
   canAssignIntervention,
   canAuthorCurriculum,
+  canReviewCurriculum,
+  curriculumGrantsOf,
   canEnterGrade,
   canManagePermissions,
   canManageSite,
@@ -321,6 +326,7 @@ describe("authored lesson content: author authorization and the draft rule", () 
     versionId,
     lessonCode: LESSON,
     blockId: null,
+    section: "instruction" as const,
     kind: "text" as const,
     text: "A rate compares two quantities with different units.",
     title: "",
@@ -664,5 +670,65 @@ describe("lesson materials: author authorization and the draft rule", () => {
     expect(resolved.materials).toHaveLength(1);
     // The access note travels with it, or the material excludes someone.
     expect(resolved.materials[0].accessNote.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Curriculum grants (vision §7, CLAUDE.md §3)
+// ---------------------------------------------------------------------------
+
+describe("curriculum grants are checked independently of role", () => {
+  it("POSITIVE: a teacher may hold `author` without any administrative access", () => {
+    const teacherAuthor = user("u_alvarez");
+    expect(teacherAuthor.role).toBe("teacher");
+    expect(canAuthorCurriculum(teacherAuthor)).toBe(true);
+    expect(curriculumGrantsOf(teacherAuthor)).toEqual(["author"]);
+
+    // Authoring, and nothing beyond it.
+    expect(canReviewCurriculum(teacherAuthor)).toBe(false);
+    expect(canAdministerCurriculum(teacherAuthor)).toBe(false);
+    expect(canManagePermissions(teacherAuthor)).toBe(false);
+    expect(canReadAllAudit(teacherAuthor)).toBe(false);
+  });
+
+  it("NEGATIVE: an organization administrator holds no curriculum grant by seniority", () => {
+    const orgAdmin = user("u_okonjo");
+    expect(orgAdmin.role).toBe("org_admin");
+    expect(canAuthorCurriculum(orgAdmin)).toBe(false);
+    expect(curriculumGrantsOf(orgAdmin)).toEqual([]);
+    expect(canReviewCurriculum(orgAdmin)).toBe(false);
+    expect(canAdministerCurriculum(orgAdmin)).toBe(false);
+
+    expect(() => assertCanReviewCurriculum(orgAdmin)).toThrow(/reviewer/i);
+    expect(() => assertCanAdministerCurriculum(orgAdmin)).toThrow(/administrator/i);
+  });
+
+  it("POSITIVE: the curriculum lead holds all three", () => {
+    const lead = user("u_haddad");
+    expect(curriculumGrantsOf(lead)).toEqual(["author", "reviewer", "administrator"]);
+    expect(canReviewCurriculum(lead)).toBe(true);
+    expect(canAdministerCurriculum(lead)).toBe(true);
+  });
+
+  it("NEGATIVE: a student holds nothing, whatever the grant list says", () => {
+    const student = user("u_amara");
+    expect(canAuthorCurriculum(student)).toBe(false);
+    expect(curriculumGrantsOf(student)).toEqual([]);
+    expect(canReviewCurriculum(student)).toBe(false);
+    expect(canAdministerCurriculum(student)).toBe(false);
+  });
+
+  it("POSITIVE: an account with no grant list falls back to `author`", () => {
+    // An account provisioned before the design studio existed carries no list.
+    // It keeps exactly the access it had, stated rather than inferred.
+    const legacy = { ...user("u_alvarez"), curriculumGrants: undefined };
+    expect(curriculumGrantsOf(legacy)).toEqual(["author"]);
+    expect(canReviewCurriculum(legacy)).toBe(false);
+  });
+
+  it("NEGATIVE: an empty grant list is read the same way, never as everything", () => {
+    const empty = { ...user("u_alvarez"), curriculumGrants: [] };
+    expect(curriculumGrantsOf(empty)).toEqual(["author"]);
+    expect(canAdministerCurriculum(empty)).toBe(false);
   });
 });

@@ -1,0 +1,34 @@
+-- narrative_assets
+--
+-- Artwork and documents a lesson can place, and the candidates waiting on a
+-- person.
+--
+-- POSITIVE: everyone in the organization READS an ACCEPTED asset — a student
+--           needs the image their lesson places, and a teacher needs to see
+--           what they are teaching. A curriculum author reads candidates and
+--           rejects too, and writes assets against a narrative they may edit,
+--           or against no narrative at all.
+-- NEGATIVE: a student, a teacher, and an administrator without curriculum
+--           authoring cannot see a candidate. Nothing renders a candidate into
+--           a lesson. A curriculum author cannot attach an asset to a narrative
+--           that has left draft, or to one that was never shared with them.
+--
+-- Two checks carry the product rather than the paperwork:
+--
+--   - `accepted_assets_are_described` refuses an accepted asset with no
+--     alternative text. A picture without it is simply missing for part of the
+--     class (CLAUDE.md §12), and making that a constraint rather than a
+--     convention is what lets the rest of the product trust the `accepted`
+--     state. Alternative text is NOT required to PROPOSE a candidate: asking a
+--     designer to describe an image that does not exist yet would be asking for
+--     a guess.
+--   - `generated_assets_cite_their_generation` refuses a generated asset with
+--     no generation behind it, and a supplied one claiming a generation. That
+--     is what makes "AI-assisted" a fact in the library rather than a label.
+--
+-- `narrative_assets_decided_once` raises when a decided candidate's status is
+-- changed again. An accepted asset that could silently become rejected under a
+-- lesson already placing it would be a lesson with a hole in it.
+--
+-- The policy statements live in
+-- `supabase/migrations/0024_assets_and_ai_generations.sql`.

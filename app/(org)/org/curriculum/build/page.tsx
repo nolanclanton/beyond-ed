@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
 import { canAuthorCurriculum } from "@/lib/auth/scope";
-import { COURSES } from "@/lib/curriculum/catalog";
 import { CURRICULUM_STATUS_PRESENTATION } from "@/lib/curriculum/publication";
 import {
   editableVersions,
@@ -11,6 +10,7 @@ import {
 } from "@/lib/curriculum/lesson-authoring";
 import { db } from "@/lib/db/store";
 import {
+  ButtonLink,
   Card,
   CardHeader,
   Empty,
@@ -19,8 +19,6 @@ import {
   StatusChip,
 } from "@/lib/design/primitives";
 import { FOCUS_RING } from "@/lib/design/tokens";
-
-import { NewDraftVersionForm } from "./studio-forms";
 
 export const metadata: Metadata = {
   title: "Lesson studio · Beyond.Ed",
@@ -39,17 +37,6 @@ export default async function StudioHomePage() {
   const canAuthor = canAuthorCurriculum(actor);
   const drafts = editableVersions();
   const d = db();
-
-  /** The next unused label per course, so the common case is one keystroke. */
-  const suggested: Record<string, string> = {};
-  for (const course of COURSES) {
-    const revisions = d.courseVersions
-      .filter((v) => v.courseTitle === course.title)
-      .map((v) => Number(v.version.split(".")[1] ?? 0))
-      .filter((n) => Number.isFinite(n));
-    const year = d.courseVersions.find((v) => v.courseTitle === course.title)?.version.split(".")[0] ?? "2026";
-    suggested[course.title] = `${year}.${Math.max(0, ...revisions) + 1}`;
-  }
 
   const locked = d.courseVersions
     .filter((v) => v.status === "in_review" || v.status === "approved")
@@ -113,7 +100,7 @@ export default async function StudioHomePage() {
                           label: "Lessons ready for students",
                           value: `${summary.lessonsComplete}`,
                         },
-                        { label: "Canvas blocks", value: `${summary.blocks}` },
+                        { label: "Elements laid out", value: `${summary.blocks}` },
                         { label: "Videos attached", value: `${summary.videos}` },
                         { label: "Quiz items written", value: `${summary.items}` },
                       ]}
@@ -123,7 +110,7 @@ export default async function StudioHomePage() {
                         href={`/org/curriculum/build/${version.id}`}
                         className={`inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-strong ${FOCUS_RING}`}
                       >
-                        {canAuthor ? "Build lessons" : "Read lessons"} &rarr;
+                        {canAuthor ? "Design its lessons" : "Read its lessons"} &rarr;
                       </Link>
                     </div>
                   </div>
@@ -143,11 +130,15 @@ export default async function StudioHomePage() {
             Open a draft version
           </SectionHeading>
           <Card>
-            <div className="p-5">
-              <NewDraftVersionForm
-                courses={COURSES.map((c) => c.title)}
-                suggested={suggested}
-              />
+            <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+              <p className="max-w-xl text-sm text-ink-muted">
+                Opening a version is where designing a course starts. The next page
+                explains what it does, opens it, and takes you into the design
+                studio.
+              </p>
+              <ButtonLink href="/org/curriculum/build/new" emphasis="primary">
+                Open a new draft version &rarr;
+              </ButtonLink>
             </div>
           </Card>
         </section>

@@ -1,3 +1,9 @@
+# Third-party install scripts do not run. Every entry here is a deliberate
+# refusal: none of these packages needs its build step when installed from the
+# registry tarball, and a postinstall script is arbitrary code executing with
+# the developer's credentials on every `pnpm install`.
 allowBuilds:
+  '@google/genai': false
+  protobufjs: false
   sharp: false
   unrs-resolver: false

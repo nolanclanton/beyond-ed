@@ -26,6 +26,7 @@ import {
   itemsForLesson,
   resolveLessonContent,
 } from "@/lib/curriculum/lesson-bank";
+import { blocksInSection, sectionCounts } from "@/lib/curriculum/lesson-sections";
 import { ensureSeeded } from "@/lib/db/seed";
 import { clearDatabase, db } from "@/lib/db/store";
 import type {
@@ -73,6 +74,7 @@ function block(overrides: Partial<BlockInput> = {}): BlockInput {
     versionId: DRAFT,
     lessonCode: LESSON,
     blockId: null,
+    section: "instruction",
     kind: "text",
     text: "A rate compares two quantities with different units.",
     title: "",
@@ -521,6 +523,118 @@ describe("the lesson canvas (CLAUDE.md §7, §12)", () => {
     expect(() =>
       saveLessonBlock(user("u_okonjo"), block(), "b-deny"),
     ).toThrow(/separate authorization you do not hold/);
+  });
+
+  it("places an element in the part it was given, and each part keeps its own order", () => {
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ section: "instruction", text: "Rates compare two quantities." }),
+      "s-1",
+    );
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ section: "worked_model", text: "Divide 150 by 5." }),
+      "s-2",
+    );
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ section: "instruction", text: "The unit after 'per' is the divisor." }),
+      "s-3",
+    );
+
+    const blocks = authoredLesson(DRAFT, LESSON)!.blocks;
+    expect(sectionCounts(blocks)).toMatchObject({
+      instruction: 2,
+      worked_model: 1,
+      relevance: 0,
+    });
+    expect(
+      blocksInSection(blocks, "instruction").map((b) => (b.kind === "text" ? b.text : "")),
+    ).toEqual([
+      "Rates compare two quantities.",
+      "The unit after 'per' is the divisor.",
+    ]);
+  });
+
+  it("moving an element reorders it inside its own part and disturbs no other", () => {
+    saveLessonBlock(user("u_haddad"), block({ section: "instruction", text: "A." }), "m-1");
+    saveLessonBlock(user("u_haddad"), block({ section: "relevance", text: "Why." }), "m-2");
+    saveLessonBlock(user("u_haddad"), block({ section: "instruction", text: "B." }), "m-3");
+
+    const b = blocksInSection(authoredLesson(DRAFT, LESSON)!.blocks, "instruction")[1];
+    moveLessonBlock(
+      user("u_haddad"),
+      {
+        versionId: DRAFT,
+        lessonCode: LESSON,
+        blockId: b.id,
+        direction: "up",
+        reason: "B reads better first.",
+      },
+      "m-move",
+    );
+
+    const after = authoredLesson(DRAFT, LESSON)!.blocks;
+    expect(
+      blocksInSection(after, "instruction").map((x) => (x.kind === "text" ? x.text : "")),
+    ).toEqual(["B.", "A."]);
+    expect(
+      blocksInSection(after, "relevance").map((x) => (x.kind === "text" ? x.text : "")),
+    ).toEqual(["Why."]);
+  });
+
+  it("NEGATIVE: an element already first in its part will not move up past another part", () => {
+    saveLessonBlock(user("u_haddad"), block({ section: "relevance", text: "Why." }), "e-1");
+    saveLessonBlock(user("u_haddad"), block({ section: "instruction", text: "A." }), "e-2");
+
+    const only = blocksInSection(authoredLesson(DRAFT, LESSON)!.blocks, "instruction")[0];
+    expect(() =>
+      moveLessonBlock(
+        user("u_haddad"),
+        {
+          versionId: DRAFT,
+          lessonCode: LESSON,
+          blockId: only.id,
+          direction: "up",
+          reason: "Trying to climb out of the stage.",
+        },
+        "e-move",
+      ),
+    ).toThrow(/already first in Instruction/);
+  });
+
+  it("moving an element to another part re-places it at the end of that part", () => {
+    saveLessonBlock(user("u_haddad"), block({ section: "instruction", text: "A." }), "x-1");
+    saveLessonBlock(user("u_haddad"), block({ section: "instruction", text: "B." }), "x-2");
+    saveLessonBlock(user("u_haddad"), block({ section: "notes", text: "Heading list." }), "x-3");
+
+    const first = blocksInSection(authoredLesson(DRAFT, LESSON)!.blocks, "instruction")[0];
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ blockId: first.id, section: "notes", text: "A." }),
+      "x-move",
+    );
+
+    const after = authoredLesson(DRAFT, LESSON)!.blocks;
+    expect(
+      blocksInSection(after, "instruction").map((b) => (b.kind === "text" ? b.text : "")),
+    ).toEqual(["B."]);
+    expect(
+      blocksInSection(after, "notes").map((b) => (b.kind === "text" ? b.text : "")),
+    ).toEqual(["Heading list.", "A."]);
+  });
+
+  it("a lesson is not ready while the instruction stage is empty, even if other parts are full", () => {
+    saveLessonScript(user("u_haddad"), script(), "sec-script");
+    saveLessonBlock(
+      user("u_haddad"),
+      block({ section: "worked_model", text: "Divide 150 by 5." }),
+      "sec-b",
+    );
+    const check = lessonReadiness(DRAFT, LESSON).checks.find((c) =>
+      c.label.startsWith("Instruction stage"),
+    );
+    expect(check?.done).toBe(false);
   });
 
   it("removing a block leaves the rest in order", () => {

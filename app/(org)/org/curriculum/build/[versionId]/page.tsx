@@ -108,7 +108,7 @@ export default async function VersionUnitsPage({
               { value: `${summary.lessonsInCourse}`, label: "Lessons in the course" },
               { value: `${summary.lessonsStarted}`, label: "Started" },
               { value: `${summary.lessonsComplete}`, label: "Ready for students" },
-              { value: `${summary.blocks}`, label: "Canvas blocks" },
+              { value: `${summary.blocks}`, label: "Elements laid out" },
               { value: `${summary.videos}`, label: "Videos" },
               { value: `${summary.materials}`, label: "Materials" },
               { value: `${summary.items}`, label: "Quiz items" },
@@ -127,7 +127,7 @@ export default async function VersionUnitsPage({
       <section aria-labelledby="units" className="mt-9">
         <SectionHeading
           id="units"
-          hint="The course plan's own units. Open one to build its fifteen lessons."
+          hint="The course plan's own units. Open one to design its fifteen lessons."
         >
           Units
         </SectionHeading>

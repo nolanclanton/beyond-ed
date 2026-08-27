@@ -169,7 +169,7 @@ export default async function StudioUnitPage({
                         </p>
                         <p className="mt-1 text-sm text-ink-muted">
                           {draft
-                            ? `${draft.blocks.length} blocks · ${draft.videos.length} videos · ${exitItems} Exit Ticket items`
+                            ? `${draft.blocks.length} elements · ${draft.videos.length} videos · ${exitItems} Exit Ticket items`
                             : "Nothing written yet."}
                         </p>
                       </div>
@@ -188,10 +188,18 @@ export default async function StudioUnitPage({
                         }
                       />
                       <Link
+                        href={`/org/curriculum/build/${version.id}/${lesson.code}/design`}
+                        className={`text-sm font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
+                      >
+                        {gate.editable ? "Design" : "Layout"}
+                        <span className="sr-only"> {lesson.title}</span>
+                      </Link>
+                      <Link
                         href={`/org/curriculum/build/${version.id}/${lesson.code}`}
                         className={`text-sm font-semibold text-primary underline-offset-4 hover:underline ${FOCUS_RING}`}
                       >
                         {gate.editable ? "Build" : "Read"}
+                        <span className="sr-only"> {lesson.title}</span>
                       </Link>
                     </div>
                   </div>

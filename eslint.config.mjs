@@ -3,10 +3,16 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
 /**
- * No AI or LLM dependency, anywhere (CLAUDE.md §10). Flat config replaces a
- * rule rather than merging it, so this pattern list is spread into every
- * `no-restricted-imports` block below instead of living in one global block
- * that a later block would silently override.
+ * No AI or LLM dependency, anywhere except `/lib/ai` (CLAUDE.md §10). Flat
+ * config replaces a rule rather than merging it, so this pattern list is spread
+ * into every `no-restricted-imports` block below instead of living in one
+ * global block that a later block would silently override.
+ *
+ * `/lib/ai` is the ONE directory the ban lifts for, and it lifts only there:
+ * the block for it appears after the global block and drops this pattern while
+ * adding its own, tighter restrictions. Confining the SDK to a path is what
+ * makes §10.2 checkable rather than a promise — a generative call cannot appear
+ * on a student's lesson page without moving a file.
  */
 const NO_LLM = {
   group: [
@@ -18,15 +24,42 @@ const NO_LLM = {
     "langchain",
     "langchain/*",
     "@langchain/*",
-    "ai",
-    "ai/*",
+    // Anchored with a leading slash. These patterns are matched with
+    // gitignore semantics, where an unanchored "ai" matches ANY path segment
+    // called `ai` — including this repository's own `/lib/ai`, which is the
+    // one directory the rule is meant to permit.
+    "/ai",
+    "/ai/*",
     "@ai-sdk/*",
     "replicate",
     "cohere-ai",
     "ollama",
   ],
   message:
-    "CLAUDE.md §10: Beyond.Ed contains no AI tutor, chatbot, copilot, or generative surface. No LLM SDK may be imported.",
+    "CLAUDE.md §10: the learning product contains no AI tutor, chatbot, copilot, or generative surface. An LLM SDK may be imported only from /lib/ai.",
+};
+
+/**
+ * What the assistant may never reach (CLAUDE.md §10.2).
+ *
+ * `/lib/ai` builds a context object out of curriculum records and sends it to
+ * Gemini. It has no business importing the modules that hold student work, and
+ * an import here would be the first step toward a generative call that reads
+ * one. The context builders take curriculum ids and return curriculum text;
+ * everything a student did is on the other side of this line.
+ */
+const NO_STUDENT_RECORDS = {
+  group: [
+    "@/lib/grades/*",
+    "@/lib/mastery/*",
+    "@/lib/evidence/*",
+    "@/lib/recommend/*",
+    "@/lib/intervention/*",
+    "@/lib/views/*",
+    "@/lib/learning/*",
+  ],
+  message:
+    "CLAUDE.md §10.2: /lib/ai must never read student records. Nothing generative may touch evidence, grades, mastery, recommendations, or intervention state.",
 };
 
 const eslintConfig = defineConfig([
@@ -37,6 +70,18 @@ const eslintConfig = defineConfig([
     files: ["**/*.{ts,tsx,mts,mjs}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [NO_LLM] }],
+    },
+  },
+
+  /**
+   * The curriculum design assistant (CLAUDE.md §10.2). The LLM SDK is permitted
+   * HERE and nowhere else; in exchange this directory may not import anything
+   * that holds a student's work.
+   */
+  {
+    files: ["lib/ai/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [NO_STUDENT_RECORDS] }],
     },
   },
 

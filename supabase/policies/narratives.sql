@@ -1,0 +1,50 @@
+-- narratives, narrative_shares, narrative_characters, narrative_locations,
+-- narrative_arc_moments, narrative_chapters, narrative_beats,
+-- narrative_plot_threads, narrative_versions
+--
+-- The story world a unit is taught inside. Reusable across courses, DUPLICATED
+-- rather than shared, and carrying no student data of any kind.
+--
+-- POSITIVE: everyone in the organization holding curriculum authoring READS a
+--           narrative that has left draft — that is what makes the Narrative
+--           Bank a bank. The owner, and anyone the OWNER shared it with, edits
+--           it while it is a draft. A reviewer moves a submitted narrative
+--           forward.
+-- NEGATIVE: a draft belonging to somebody else is invisible: an unfinished
+--           story is working state, not library material. Nobody edits a
+--           narrative that has left draft — not the owner, not a reviewer, not
+--           an administrator — because a narrative in review must read the same
+--           on the reviewer's screen as it did when it was sent, and copies
+--           other people made state a provenance that must stay true. A sharer
+--           cannot re-share: only the owner changes who may edit. An
+--           organization administrator with no curriculum authorization cannot
+--           write anything here, and a student cannot read anything here.
+--
+-- Enforced twice, as with lesson content: in the policies below, and by the
+-- `reject_non_draft_narrative` trigger in migration 0023, so a write that
+-- arrives another way still meets the draft rule.
+--
+-- Two properties are worth naming because they are the ones the reuse story
+-- rests on, and neither is a policy:
+--
+--   - `based_on_narrative_id` is set at creation and immutable
+--     (`narratives_provenance_immutable`). A copy whose stated history could be
+--     re-pointed would be a copy whose history is a guess.
+--   - a duplicate shares no row and no object with its source. That is
+--     `duplicateNarrative` in `lib/narrative/studio.ts`, and it is checked by
+--     mutating each side and reading the other in
+--     `tests/integration/narrative-studio.test.ts`.
+--
+-- `official` is an administrator's word, not an author's: the WITH CHECK on
+-- `narratives_update_stakeholder` refuses to let anybody else set it, so the
+-- label means something in the bank.
+--
+-- A saved version is insert-only. Rewriting a checkpoint would make the history
+-- it exists to preserve unreliable, so `narrative_versions_immutable` raises on
+-- UPDATE and DELETE exactly as `evidence` does.
+--
+-- The policy statements themselves live in
+-- `supabase/migrations/0023_narratives.sql`, applied with the tables they
+-- govern. This file is the statement of intent they are reviewed against, and
+-- the cases above are executable in `/tests/policies/scope.test.ts` and
+-- `/tests/integration/narrative-studio.test.ts`.

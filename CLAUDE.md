@@ -19,7 +19,10 @@ This file governs **how** the software is built. Where this file and either sour
 4. **Evidence and audit events are append-only.** No `UPDATE`. No `DELETE`.
 5. **Curriculum and rules are versioned.** Historical calculations always resolve to the version in force at the time.
 6. **Recommendations are deterministic and human-controlled.** No model, no randomness, no consequential auto-assignment.
-7. **No chatbot, AI tutor, copilot, or conversational assistant appears anywhere in the product.**
+7. **No chatbot, AI tutor, copilot, or conversational assistant appears anywhere in the
+   learning product.** Curriculum authoring is the one narrow, human-directed exception,
+   and it is defined exhaustively in §10. Nothing generative may run in a path that reads
+   or writes a student record.
 8. **Production deployments and destructive database commands require explicit human approval.**
 9. If a requested change would break 1–8, **stop and ask.** Do not proceed on assumption.
 
@@ -44,10 +47,18 @@ When you are unsure whether something crosses one of these lines: it does. Ask.
 | Validation | **Zod** | Every server action and route handler validates input |
 | Testing | **Vitest** (unit/integration), **Playwright** (e2e) | See §12 |
 | Background work | **Supabase queues / scheduled functions** | Durable, retry-limited, status-visible |
+| Curriculum design assistance | **Google Gemini via `@google/genai`** | Server-side only, authoring surfaces only, human-approved. §10 governs it |
 
 **Adding any other dependency requires human approval.** Do not add an ORM, a state-management library, a charting library, an auth provider, an analytics SDK, or an AI/LLM SDK on your own initiative. Propose it, state what it replaces, and wait.
 
 **Explicitly forbidden dependencies:** any LLM/AI SDK (`openai`, `@anthropic-ai/*`, `@google/generative-ai`, `langchain`, `ai`, etc.), any client-side chat widget, any third-party analytics that transmits student records off-platform.
+
+**One exception, and it is confined by path.** `@google/genai` is approved for the
+curriculum design studio and may be imported **only from `/lib/ai/**`**. Every other
+directory — including every learner and teacher surface, `/lib/grades`, `/lib/mastery`,
+`/lib/recommend`, and `/lib/evidence` — remains under the ban. This is enforced in
+`eslint.config.mjs` and again in `tests/unit/module-boundaries.test.ts`, which cannot be
+disabled inline. See §10.
 
 ### Data-flow rules
 
@@ -77,6 +88,8 @@ When you are unsure whether something crosses one of these lines: it does. Ask.
   /recommend              Deterministic rule engine (pure functions only)
   /intervention           Lifecycle state machine
   /audit                  Append-only audit event writes
+  /narrative              Narrative bibles, characters, arcs, beats, threads
+  /ai                     THE ONLY directory that may import an LLM SDK (§10)
   /design                 Tokens, primitives
 /supabase
   /migrations             Forward-only, timestamped, reviewed
@@ -308,22 +321,65 @@ Implement these as explicit transition tables with a single guarded transition f
 
 ---
 
-## 10. No chatbot, AI tutor, or conversational assistant
+## 10. No AI in the learning product; one bounded exception for authoring
 
-**The product contains no AI-facing surface of any kind.** Not for students, not for teachers, not for site or organization administrators.
+### 10.1 The learning product contains no AI-facing surface of any kind
+
+Not for students, not for teachers, not for site administrators, and not on any
+administrator screen that reads a student record.
 
 Prohibited, in the product and in any prototype, demo, or preview branch:
 
 - Chat windows, message composers to a bot, floating assistant bubbles, "Ask Beyond.Ed," conversational help, or any free-text box whose response is generated.
-- LLM or generative-model calls at runtime, in any layer, including "just for hints," "just for feedback," or "just for the demo."
-- Any AI/LLM SDK in `package.json`.
-- Any label, tooltip, empty state, marketing copy, or roadmap surface implying an assistant exists or is coming.
+- LLM or generative-model calls at runtime in **any** learner-facing or teacher-facing path, including "just for hints," "just for feedback," or "just for the demo."
+- Any generative call inside `/lib/grades`, `/lib/mastery`, `/lib/recommend`, `/lib/evidence`, `/lib/intervention`, or `/lib/audit`, in any form, ever.
+- Any label, tooltip, empty state, marketing copy, or roadmap surface implying an assistant exists for a student or a teacher.
 
 Individualized review and recommendations use **transparent, versioned curriculum rules over stored evidence.** Help is human: teacher messages, teacher-provided resources, worked examples, vocabulary, notes, accessibility tools, and a way to request a person.
 
-> **Note for continuity:** an earlier direction for this project described a lesson-aware AI tutor with Tutor and Reference modes. **That direction is superseded by the August 2026 blueprint.** Do not reintroduce it, and do not treat older notes, branches, or prototypes as authorization.
+> **Note for continuity:** an earlier direction for this project described a lesson-aware AI tutor with Tutor and Reference modes. **That direction remains superseded.** The exception below is an authoring tool for adults building curriculum; it is not authorization to reintroduce a tutor, and older notes, branches, or prototypes are not authorization either.
 
-If a task requires generative behavior to be satisfiable, **do not build it.** Say that it conflicts with this rule and propose a rules-based alternative.
+### 10.2 The exception: the Curriculum Design Studio assistant
+
+A curriculum designer building a lesson in `/org/curriculum` may call a
+**constrained, server-side Gemini assistant**. The designer is the author. The
+assistant brainstorms, drafts a bounded component, rewrites a selected passage,
+critiques, and checks. It decides nothing.
+
+Every AI action in this product has all five of these properties. An action
+missing any one of them is not permitted:
+
+1. **Human initiated.** One person, one click, one operation. No loop, no schedule, no background job, no follow-on task.
+2. **Narrowly scoped.** The action is a named entry in the capability registry in `/lib/ai/capabilities.ts`. An action not in the registry is rejected by the server.
+3. **Context limited.** The server builds the context. The browser never supplies a system prompt, a model name, or a raw prompt.
+4. **Result previewed.** Output arrives as a proposal and changes nothing.
+5. **Human accepted.** Only a separate, authenticated, audited human action commits content to a draft.
+
+**Structurally unavailable, not merely disabled.** There is no registry entry, no
+code path, and no toggle for any of these, and adding one is a §15 escalation:
+publishing or approving curriculum, changing a course sequence, editing
+standards or prerequisite rules, assigning students, messaging students,
+changing permissions, managing users, running a database query, or any write to
+`evidence`, `audit_events`, `grade_records`, `interventions`, or `users`.
+
+**The AI never touches the database.** It receives a context object the server
+assembled and returns text. It holds no credentials, has no tools, no function
+calling, no MCP, no agent, no environment, and no `background: true`.
+
+**Confined by path.** `@google/genai` may be imported only from `/lib/ai/**`.
+The key is `GEMINI_API_KEY`, server-side only; `NEXT_PUBLIC_GEMINI_API_KEY` must
+never exist.
+
+**Never a dependency.** Authoring works with the assistant disabled, unconfigured,
+or failing. If a Gemini call fails, the designer's work is untouched and the UI
+says so.
+
+**Never a chatbot.** Controls sit beside the block being edited. The product does
+not ship an open conversation, and no surface calls it an agent.
+
+If a task outside §10.2 requires generative behavior to be satisfiable, **do not
+build it.** Say that it conflicts with this rule and propose a rules-based
+alternative.
 
 ---
 
@@ -357,7 +413,11 @@ A change is not complete until all of the following hold.
 - [ ] Any calculation stores its rule version and inputs.
 - [ ] Any course change re-validates the 135 + 40 = 175 budget.
 - [ ] Status changes go through the guarded transition function.
-- [ ] No AI/LLM dependency, call, or surface was introduced.
+- [ ] No AI/LLM dependency, call, or surface was introduced outside `/lib/ai` and the
+      curriculum authoring screens; nothing generative reads or writes a student record
+      (§10). Every new AI capability is a registry entry with a role check, a bounded
+      context builder, a validated output schema, a proposal step, and an audited human
+      acceptance — and the studio still works with the assistant off.
 - [ ] **No dead controls.** A control that cannot safely complete its action is hidden or explicitly labeled as a preview.
 - [ ] Accessibility: keyboard reachable, visible focus, status conveyed by text as well as color, captions/transcripts for media, readable contrast, responsive.
 - [ ] A durable result state is shown on success; on failure, the UI explains what was preserved and the safe next step.
@@ -397,7 +457,10 @@ A change is not complete until all of the following hold.
 - A change would mutate or delete evidence or audit history.
 - A migration would drop, rename, or retype a column holding student records.
 - A recommendation path would become nondeterministic or would assign without a human decision.
-- Anything generative, conversational, or model-driven is proposed.
+- Anything generative, conversational, or model-driven is proposed for a learner or
+  teacher surface, or anywhere outside the §10.2 authoring exception.
+- A new AI capability is proposed that would write, publish, approve, assign, message,
+  or decide, rather than propose.
 - A production deployment or destructive database command is needed.
 - The blueprint is ambiguous on a rule that affects grades, mastery, placement, or permissions.
 
